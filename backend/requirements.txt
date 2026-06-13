@@ -1,0 +1,7 @@
+fastapi
+uvicorn[standard]
+httpx
+psutil
+groq
+python-dotenv
+sqlmodel
