@@ -25,16 +25,17 @@ This project builds the missing middle: a system that **closes the full loop** �
 
 ## Goal
 
+**Research question:**
+> Can a multi-agent, LLM-orchestrated system autonomously detect, diagnose, and recover e-commerce microservice failures faster and more accurately than manual intervention — and what is the measurable reduction in Mean Time To Recovery (MTTR)?
+
 **Engineering goal:** a real, deployable web application (not a throwaway demo) that anyone can clone, run, and watch heal itself live.
 
 ---
 
-**Key design choice:** agents never call each other directly. They publish and subscribe to *events* on a lightweight in-process event bus (our own ~40-line replacement for enterprise tools like Solace Agent Mesh). This keeps the system decoupled, testable, and is itself part of the research contribution.
+## How it works (the architecture in one picture)
 
----
-## How it works?(architecture)
-
-┌──────────────────────────────────────────────────┐
+\```
+   ┌──────────────────────────────────────────────────┐
    │              React Dashboard (frontend)            │
    │   health tiles · incident log · MTTR chart · etc   │
    └───────────────────────┬───────────────────────────┘
@@ -64,6 +65,9 @@ This project builds the missing middle: a system that **closes the full loop** �
    │                                               ▼     │
    │                                          SQLite DB  │
    └──────────────────────────────────────────────────┘
+\```
+
+**Key design choice:** agents never call each other directly. They publish and subscribe to *events* on a lightweight in-process event bus (our own ~40-line replacement for enterprise tools like Solace Agent Mesh). This keeps the system decoupled, testable, and is itself part of the research contribution.
 
 ### The 5 agents
 
@@ -86,12 +90,13 @@ The **Orchestrator** ties them together and runs the retry loop (up to 2 retries
 | Frontend | **React 18 + Vite + Tailwind CSS** | Real, professional, portfolio-grade UI |
 | Charts | **Recharts** | Clean React-native charts |
 | Backend | **Python 3.11 + FastAPI** | Async, fast, industry standard |
-| AI / LLM | **Groq API (Llama 3.3 70B) — FREE** |
+| AI / LLM | **Groq API (Llama 3.3 70B) — FREE** | No credit card, generous free tier |
 | Event bus | **Custom async pub/sub (our own code)** | Free, fully understood, research-novel |
 | Database | **SQLite + SQLModel** | Zero-setup, file-based |
 | Metrics | **psutil + simulated metrics** | Real CPU/mem readings where useful |
 | Deployment | **Render (backend) + Vercel (frontend)** | Both have free tiers |
 
+> **No paid services anywhere.** Groq replaces the paid Anthropic API. Our own event bus replaces Solace Agent Mesh.
 
 ---
 
@@ -126,33 +131,52 @@ Dashboard runs at `http://localhost:5173`.
 2. Click **Inject Fault → Payment → crash** in the sidebar.
 3. Watch live: the incident banner moves through *detecting → diagnosing → fixing → validating*, then logs a green RECOVERED row with its MTTR.
 
+---
+
+## Roadmap
+
+This is built in **6 phases at your own pace** (not a fixed calendar). Each phase ends with something that runs and a git commit.
+
+- **Phase 0 — Setup:** repo, folders, tooling, first commit
+- **Phase 1 — Services:** 5 simulated services + fault injection ✅ *(started)*
+- **Phase 2 — Monitor + Event Bus:** anomaly detection over a custom event bus
+- **Phase 3 — AI Agents:** Diagnosis (Groq), Fix, Validation, Report
+- **Phase 4 — Orchestrator:** full loop wiring + retry logic
+- **Phase 5 — React Dashboard:** the real frontend
+- **Phase 6 — Deploy + Paper:** go live, run experiments, write the paper
+
+See [`docs/build-plan.md`](docs/build-plan.md) for the detailed phase breakdown.
 
 ---
 
 ## Repository Structure
+
+\```
 self-healing-ecommerce/
 ├── backend/
 │   ├── services/          # 5 simulated microservices
-│   ├── agents/            # monitor, diagnosis, fix, validation, report
-│   ├── orchestrator/      # event bus + orchestrator + retry logic
-│   ├── shared/            # config, models, event definitions
-│   ├── database/          # SQLite setup
-│   ├── main.py            # FastAPI entry point
+│   ├── agents/             # monitor, diagnosis, fix, validation, report
+│   ├── orchestrator/       # event bus + orchestrator + retry logic
+│   ├── shared/             # config, models, event topic definitions
+│   ├── database/           # SQLite setup
+│   ├── fault_injector/     # script to manually break services
+│   ├── main.py             # FastAPI entry point
 │   ├── requirements.txt
-│   └── .env.example
-├── frontend/              # React + Vite app
-│   ├── src/
-│   │   ├── components/     # HealthTile, IncidentTable, charts, etc.
-│   │   ├── hooks/          # usePolling, useServices
-│   │   └── App.jsx
-│   └── package.json
-├── docs/                  # all project documentation (this folder)
+│   ├── .env.example
+│   └── .env                # (not committed)
+├── frontend/                # React + Vite dashboard (Phase 5)
+│   └── src/
+│       ├── components/      # HealthTile, IncidentTable, charts...
+│       ├── hooks/            # usePolling
+│       └── App.jsx
+├── docs/                    # architecture, build plan, research paper, etc.
+├── .gitignore
 └── README.md
----
+\```
 
 ## Research Paper
 
-This project targets a publishable paper.
+This project targets a publishable paper. The full outline, related-work list, and experiment methodology live in [`docs/research-paper.md`](docs/research-paper.md).
 
 **Novel contribution:** a lightweight, event-driven, LLM-diagnosed *closed-loop* (with retry) self-healing system for microservices, runnable on commodity hardware at zero API cost — evaluated against a manual-response baseline on a reproducible testbed.
 
@@ -160,4 +184,4 @@ This project targets a publishable paper.
 
 ## License
 
-MIT
+MIT — see [LICENSE](LICENSE).
