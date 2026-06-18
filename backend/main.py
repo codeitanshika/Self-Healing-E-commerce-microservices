@@ -13,10 +13,11 @@ Run with:
     uvicorn main:app --reload --port 8000
 Then open http://localhost:8000/docs to test everything interactively.
 """
-
+import asyncio
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from services.service_manager import ServiceManager
+
 
 # ── Create the app ───────────────────────────────────────────────
 app = FastAPI(
@@ -41,12 +42,23 @@ app.add_middleware(
 # ── Create one shared ServiceManager ────────────────────────────
 # This is created ONCE when the app starts.
 # All routes use this same instance — so state is shared.
+# ── Create one shared ServiceManager ────────────────────────────
 manager = ServiceManager()
 
+# ── Create the Monitor Agent ─────────────────────────────────────
+from agents.monitor_agent import MonitorAgent
+monitor = MonitorAgent(manager)
 
+# ── Start background tasks on startup ────────────────────────────
+@app.on_event("startup")
+async def startup():
+    """Runs once when FastAPI starts. Launches all background agents."""
+    asyncio.create_task(monitor.run())
+    print("✅ Monitor Agent started as background task")
 # ────────────────────────────────────────────────────────────────
 # ROOT
 # ────────────────────────────────────────────────────────────────
+
 
 @app.get("/")
 def root():
@@ -156,3 +168,15 @@ def get_unhealthy():
 # GET  /api/stats              → avg MTTR, total revenue protected
 # GET  /api/active-incident    → current incident pipeline stage
 # POST /api/orchestrator/run   → manually trigger the healing pipeline
+
+@app.get("/api/events")
+def get_recent_events(limit: int = 20):
+    """
+    Returns recent events from the event bus log.
+    Used by the dashboard debug panel.
+    """
+    from orchestrator.event_bus import bus
+    return {
+        "events": bus.get_recent_events(limit),
+        "subscribers": bus.get_subscriber_count(),
+    }
