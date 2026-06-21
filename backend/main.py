@@ -43,11 +43,29 @@ app.add_middleware(
 # This is created ONCE when the app starts.
 # All routes use this same instance — so state is shared.
 # ── Create one shared ServiceManager ────────────────────────────
+# ── Create one shared ServiceManager ────────────────────────────
 manager = ServiceManager()
 
-# ── Create the Monitor Agent ─────────────────────────────────────
+# ── Initialize database ──────────────────────────────────────────
+from database.models import init_db
+init_db()
+
+# ── Create the Orchestrator FIRST (other agents need its cache) ──
+from orchestrator.orchestrator import Orchestrator
+orchestrator = Orchestrator()
+
+# ── Create all agents (each subscribes itself to the event bus) ──
 from agents.monitor_agent import MonitorAgent
+from agents.diagnosis_agent import DiagnosisAgent
+from agents.fix_agent import FixAgent
+from agents.validation_agent import ValidationAgent
+from agents.report_agent import ReportAgent
+
 monitor = MonitorAgent(manager)
+diagnosis_agent = DiagnosisAgent()
+fix_agent = FixAgent(manager)
+validation_agent = ValidationAgent(manager)
+report_agent = ReportAgent(orchestrator.incident_cache)
 
 # ── Start background tasks on startup ────────────────────────────
 @app.on_event("startup")
