@@ -181,11 +181,41 @@ def get_unhealthy():
 # ROUTES ADDED IN LATER PHASES
 # ────────────────────────────────────────────────────────────────
 
-# Phase 3+:
-# GET  /api/incidents          → incident history from SQLite
-# GET  /api/stats              → avg MTTR, total revenue protected
-# GET  /api/active-incident    → current incident pipeline stage
-# POST /api/orchestrator/run   → manually trigger the healing pipeline
+# ────────────────────────────────────────────────────────────────
+# DASHBOARD DATA ROUTES (Phase 5)
+# ────────────────────────────────────────────────────────────────
+
+from database.queries import get_all_incidents, get_stats, get_mttr_by_fault_type
+
+
+@app.get("/api/incidents")
+def get_incidents(limit: int = 50):
+    """Incident history for the dashboard table, newest first."""
+    return {"incidents": get_all_incidents(limit)}
+
+
+@app.get("/api/stats")
+def get_dashboard_stats():
+    """Aggregate stats for the summary metric cards."""
+    return get_stats()
+
+
+@app.get("/api/mttr-chart")
+def get_mttr_chart():
+    """Average MTTR grouped by root cause, for the bar chart."""
+    return {"data": get_mttr_by_fault_type()}
+
+
+@app.get("/api/active-incident")
+def get_active_incident():
+    """
+    The most recent in-progress incident, for the live banner.
+    Returns {active: false} if nothing is currently being handled.
+    """
+    incident = orchestrator.get_active_incident()
+    if incident is None:
+        return {"active": False}
+    return {"active": True, **incident}
 
 @app.get("/api/events")
 def get_recent_events(limit: int = 20):
