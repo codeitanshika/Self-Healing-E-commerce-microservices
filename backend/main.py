@@ -29,12 +29,16 @@ app = FastAPI(
 # ── CORS — lets the React frontend talk to this backend ──────────
 # Without this, the browser blocks requests from localhost:5173
 # to localhost:8000 (they are on different ports = different origins)
+import os
+
+ALLOWED_ORIGINS = os.getenv(
+    "ALLOWED_ORIGINS",
+    "http://localhost:5173,http://localhost:3000"
+).split(",")
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:5173",    # React dev server (Phase 5)
-        "http://localhost:3000",    # alternate React port
-    ],
+    allow_origins=ALLOWED_ORIGINS,
     allow_methods=["*"],
     allow_headers=["*"],
 )
