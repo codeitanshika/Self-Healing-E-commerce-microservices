@@ -9,6 +9,15 @@
 
 ---
 
+## 🚀 Live Demo
+
+| | URL |
+|---|---|
+| **Dashboard** | https://self-healing-e-commerce-microservices-aax3tmiok-anshika494shiv.vercel.app |
+| **API Docs** | https://self-healing-backend-m1e1.onrender.com/docs |
+
+> Note: First load may take 30-50 seconds as the free backend wakes from sleep.
+
 ## What is this?
 
 Real e-commerce platforms run as many small **microservices** — separate programs for login, cart, payments, inventory, and notifications. In production these services fail constantly: they crash, slow down, leak memory, or start throwing errors.
