@@ -18,6 +18,14 @@
 
 > Note: First load may take 30-50 seconds as the free backend wakes from sleep.
 
+### Known limitations of free deployment
+- Render free tier spins down after 15 minutes of inactivity
+  (first request takes 30-50 seconds to wake up)
+- Background tasks (Monitor Agent) restart on wake-up
+- For best demo experience, run locally with both terminals active
+- The live deployment demonstrates the API and dashboard UI;
+  the full autonomous healing pipeline is best observed locally
+
 ## What is this?
 
 Real e-commerce platforms run as many small **microservices** — separate programs for login, cart, payments, inventory, and notifications. In production these services fail constantly: they crash, slow down, leak memory, or start throwing errors.

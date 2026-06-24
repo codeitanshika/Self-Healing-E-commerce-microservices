@@ -5,7 +5,7 @@ Central place for all constants used across the project.
 If you ever need to change a port, threshold, or service name,
 you change it HERE — not scattered across 10 files.
 """
-
+import os
 # ── Service definitions ─────────────────────────────────────────
 # Each service has a name and a logical port number.
 # (We don't actually run them on separate ports — it's one FastAPI app
@@ -59,4 +59,4 @@ MAX_RETRIES = 2             # how many times to retry a failed fix
 MANUAL_BASELINE_SECONDS = 900   # 15 minutes — assumed manual MTTR for comparison
 
 # ── Monitor Agent settings ───────────────────────────────────────
-MONITOR_POLL_INTERVAL = 5   # seconds between each health check
+MONITOR_POLL_INTERVAL = int(os.getenv("MONITOR_POLL_INTERVAL", 5))   # seconds between each health check
