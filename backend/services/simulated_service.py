@@ -107,7 +107,12 @@ class SimulatedService:
             self.status = "degraded"
             self.response_time_ms = random.randint(200, 400)
             self.error_rate = 0.05
-            self.memory_percent = random.uniform(87.0, 95.0)
+            # Fixed (not random) starting point — the growth curve in
+            # _simulate_traffic() is time-based from here, so a random
+            # start would just shift the whole curve instead of adding
+            # useful variety, and risked landing close enough to the
+            # 99% auto-crash line to tip over on the very next read.
+            self.memory_percent = 87.0
 
         elif fault_type == "error":
             self.status = "degraded"
@@ -186,8 +191,17 @@ class SimulatedService:
             )
 
         elif self.status == "degraded" and self.active_fault == "memory":
-            # Memory leak — keeps growing over time until it crashes
-            self.memory_percent += random.uniform(2.0, 8.0)
+            # Memory leak — grows deterministically with WALL-CLOCK TIME
+            # since injection, not with how many times get_health() has
+            # been called. Growth used to be "+= random amount per call",
+            # which meant the leak progressed faster the more things were
+            # polling this service (dashboard + Monitor Agent + validation
+            # checks all call get_health()) — making the same fault crash
+            # at wildly different, poll-frequency-dependent times across
+            # runs, and often crashing on the very first read after
+            # injection before diagnosis could see it as a memory_leak.
+            elapsed = (datetime.now() - self.fault_injected_at).total_seconds()
+            self.memory_percent = min(99.5, 87.0 + elapsed * 1.0)
             if self.memory_percent >= 99.0:
                 # Finally crashes from memory exhaustion
                 self.status = "down"
