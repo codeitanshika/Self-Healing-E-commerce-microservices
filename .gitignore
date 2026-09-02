@@ -9,3 +9,8 @@ dist/
 .vscode/
 .idea/
 .DS_Store
+
+# Unpublished research paper draft — keep out of the (potentially public) repo
+# until it's actually published. See docs/research-paper.md for the outline
+# instead, which is safe to keep public.
+docs/paper.md
