@@ -52,6 +52,15 @@ class ReportAgent:
         mttr = payload["mttr_seconds"]
         service = payload["service"]
 
+        # Only log the TERMINAL outcome of an incident (RECOVERED or
+        # ESCALATED). STILL_BROKEN is an intermediate state the
+        # Orchestrator retries from — logging it here too would write
+        # one extra DB row per retry for the same incident, inflating
+        # total_incidents / recovery_rate / avg_mttr in the dashboard
+        # stats and the research paper's metrics.
+        if result == "STILL_BROKEN":
+            return
+
         # Pull the rest of the incident's details from the shared cache
         # (root_cause, fix_applied, etc. were stored there earlier
         #  by the Orchestrator as the incident progressed)
