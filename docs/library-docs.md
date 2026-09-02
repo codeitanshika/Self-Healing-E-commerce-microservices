@@ -46,7 +46,7 @@ mem = psutil.virtual_memory().percent    # 0-100
 
 ## Groq (free LLM — replaces paid Anthropic)
 **Install:** `pip install groq python-dotenv`
-**.env:** `GROQ_API_KEY=...` and `GROQ_MODEL=llama-3.3-70b-versatile`
+**.env:** `GROQ_API_KEY=...` and `GROQ_MODEL=openai/gpt-oss-120b`
 ```python
 import os, json
 from dotenv import load_dotenv
@@ -56,7 +56,7 @@ load_dotenv()
 client = Groq(api_key=os.getenv("GROQ_API_KEY"))
 
 resp = client.chat.completions.create(
-    model=os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile"),
+    model=os.getenv("GROQ_MODEL", "openai/gpt-oss-120b"),
     max_tokens=400, temperature=0.2,
     messages=[{"role": "user", "content": 'Reply ONLY with JSON: {"ok": true}'}],
 )

@@ -116,7 +116,7 @@ The **Orchestrator** sequences these agents and handles the retry loop (up to 2 
 | Frontend | React 18 + Vite + Tailwind CSS | Real, professional, portfolio-grade UI |
 | Charts | Recharts | Clean React-native charts |
 | Backend | Python 3.11 + FastAPI | Async, fast, industry standard |
-| AI / LLM | Groq API (Llama 3.3 70B) — FREE | No credit card, generous free tier |
+| AI / LLM | Groq API (open-weight model, default `openai/gpt-oss-120b`) — FREE | No credit card, generous free tier |
 | Event bus | Custom async pub/sub (our own code) | Free, fully understood, research-novel |
 | Database | SQLite + SQLModel | Zero-setup, file-based |
 | Deployment | Render (backend) + Vercel (frontend) | Both free tiers |

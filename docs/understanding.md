@@ -50,7 +50,11 @@ So "multi-agent AI system" really means: *five small programs that cooperate, on
 
 An **LLM** (Large Language Model) is the technology behind ChatGPT — a model trained to read text and produce sensible text back. You will **not** train one (that needs millions of dollars and huge datasets). You will **use** one that already exists, for free, through **Groq**.
 
-Groq runs open models like **Llama 3.3 70B** and gives you a free API key. You send it text, it sends text back. Our Diagnosis Agent sends it something like:
+Groq runs open-weight models — currently **gpt-oss-120b** by default (see
+`shared/llm.py`; Groq periodically retires older model IDs, so this default
+changes over time — check `GROQ_MODEL` for what's actually running) — and
+gives you a free API key. You send it text, it sends text back. Our
+Diagnosis Agent sends it something like:
 
 > "A service called payment has response_time=6000ms, error_rate=0.5, cpu=95%. Here are the possible root causes and fixes: [...]. Reply ONLY as JSON with root_cause, confidence, fix, business_impact, explanation."
 
@@ -128,7 +132,7 @@ This is the single most important thing to understand. Walk through it until you
 ## 7. Why each technology was chosen (defend it in viva)
 
 - **FastAPI** — async (agents run concurrently without blocking), auto-generates API docs, industry standard.
-- **Groq + Llama 3.3** — genuinely free, fast inference, no card. Removes the cost barrier that blocks most student AI projects.
+- **Groq + open-weight models (gpt-oss, Qwen)** — genuinely free, fast inference, no card. Removes the cost barrier that blocks most student AI projects. (Note: free-tier hosted model IDs get retired periodically — see `docs/paper.md` §6.2 for what this meant for reproducibility here.)
 - **Our own event bus** — zero cost, fully understood (you can explain every line), and a legitimate research contribution vs. bolting on a heavy framework.
 - **React + Vite** — a real frontend skill employers want; Vite is fast and modern. (Streamlit would have been quicker but isn't a "real app.")
 - **SQLite** — no database server to install or pay for; perfect for a reproducible single-machine testbed.

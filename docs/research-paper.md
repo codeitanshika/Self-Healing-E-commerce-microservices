@@ -49,7 +49,7 @@ Group prior work into three buckets and position yourself as the synthesis:
 - Define the **baseline(s)**:
   - *Manual baseline:* fixed 900s per incident (cite a source or state it as a conservative industry estimate).
   - *(Optional, stronger) Rule-based baseline:* a fixed if-fault-then-fix table with no LLM — lets you isolate the LLM's contribution.
-- State the testbed (single laptop, specs), the LLM (Llama 3.3 70B via Groq), and that everything is reproducible from the repo.
+- State the testbed (single laptop, specs), the LLM(s) (free open-weight models via Groq — see `docs/paper.md` §6.2 on why the specific model changed mid-project), and that everything is reproducible from the repo.
 
 ### 5. Results
 - **Table 1:** MTTR per fault type — Your System vs Manual Baseline (and vs Rule-Based if you do it).

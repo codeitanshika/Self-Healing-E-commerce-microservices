@@ -12,7 +12,7 @@
                                   [Orchestrator]
                                          |
                                          v
-                                 [Diagnosis Agent] --(Groq / Llama 3.3)
+                                 [Diagnosis Agent] --(Groq / gpt-oss-120b)
                                          |
                                   DIAGNOSIS_READY
                                          v
@@ -96,7 +96,7 @@ Why this matters for the paper: it gives the system the decoupling and resilienc
 - Each agent = an async task subscribing to its topics.
 
 ### 4. Intelligence Layer
-- Diagnosis Agent calls **Groq (Llama 3.3 70B)** with a structured prompt.
+- Diagnosis Agent calls **Groq (default: `openai/gpt-oss-120b`, configurable via `GROQ_MODEL`)** with a structured prompt.
 - Returns JSON: root_cause, confidence, fix, business_impact, explanation.
 
 ### 5. Persistence Layer

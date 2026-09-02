@@ -79,7 +79,7 @@ pip install -r requirements.txt
 - Create `backend/.env.example` (committed, no secret):
   ```
   GROQ_API_KEY=your_key_here
-  GROQ_MODEL=llama-3.3-70b-versatile
+  GROQ_MODEL=openai/gpt-oss-120b
   ```
 - Create `backend/.env` (NOT committed) and paste your real key.
 
@@ -94,7 +94,7 @@ load_dotenv()
 client = Groq(api_key=os.getenv("GROQ_API_KEY"))
 
 resp = client.chat.completions.create(
-    model=os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile"),
+    model=os.getenv("GROQ_MODEL", "openai/gpt-oss-120b"),
     messages=[{"role": "user", "content": 'Reply ONLY with JSON: {"ok": true}'}],
     max_tokens=50,
 )
@@ -130,7 +130,7 @@ client = Groq(api_key=os.getenv("GROQ_API_KEY"))
 
 def ask_llm(prompt: str) -> dict:
     resp = client.chat.completions.create(
-        model=os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile"),
+        model=os.getenv("GROQ_MODEL", "openai/gpt-oss-120b"),
         messages=[{"role": "user", "content": prompt}],
         max_tokens=400,
         temperature=0.2,                      # low = more consistent JSON

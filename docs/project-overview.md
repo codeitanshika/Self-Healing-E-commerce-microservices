@@ -28,7 +28,7 @@ Can a multi-agent, LLM-orchestrated system autonomously detect, diagnose, and re
 
 ## The 5 Agents
 1. **Monitor** — polls all services every 5s; publishes `ANOMALY_DETECTED`.
-2. **Diagnosis** — sends metrics to Groq (Llama 3.3); publishes `DIAGNOSIS_READY {root_cause, confidence, fix, business_impact}`. *(Only AI agent.)*
+2. **Diagnosis** — sends metrics to a free open-weight LLM via Groq (default: `openai/gpt-oss-120b`); publishes `DIAGNOSIS_READY {root_cause, confidence, fix, business_impact}`. *(Only AI agent.)*
 3. **Fix** — executes remediation (restart/reduce_load/clear_memory/reroute_traffic/retry_with_backoff); publishes `FIX_APPLIED`.
 4. **Validation** — re-checks the service; publishes `VALIDATION_RESULT` (RECOVERED/STILL_BROKEN).
 5. **Report** — writes the incident to SQLite.
@@ -49,7 +49,7 @@ Inject a fault into Payment → walk away → within ~60s the dashboard shows th
 A lightweight, event-driven, LLM-diagnosed *closed-loop* (with retry + verification) self-healing system for microservices, runnable on commodity hardware at zero API cost, evaluated on a reproducible testbed against a manual-response baseline.
 
 ## Tech Stack
-React + Vite + Tailwind + Recharts (frontend) · FastAPI (backend) · Groq/Llama 3.3 (free LLM) · custom async event bus · SQLite/SQLModel · Render + Vercel (free deploy).
+React + Vite + Tailwind + Recharts (frontend) · FastAPI (backend) · Groq/open-weight LLMs (free — model pinned via `GROQ_MODEL` env var, since Groq periodically retires model IDs, see docs/paper.md §6.2) · custom async event bus · SQLite/SQLModel · Render + Vercel (free deploy).
 
 ## Team Roles (optional — plan also works solo)
 - Person A: Services + Fix agent
