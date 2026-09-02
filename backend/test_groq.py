@@ -6,7 +6,7 @@ load_dotenv()
 client = Groq(api_key=os.getenv("GROQ_API_KEY"))
 
 resp = client.chat.completions.create(
-    model=os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile"),
+    model=os.getenv("GROQ_MODEL", "openai/gpt-oss-120b"),
     messages=[{"role": "user", "content": 'Reply ONLY with JSON: {"ok": true}'}],
     max_tokens=50,
 )
