@@ -60,6 +60,7 @@ class Orchestrator:
             "fault_type":   fault_type,
             "detected_at":  time.time(),
             "retry_count":  0,
+            "status":       "IN_PROGRESS",
         }
 
         print(f"[Orchestrator] new incident {incident_id}: {service} ({fault_type})")
@@ -144,6 +145,7 @@ class Orchestrator:
             print(f"[Orchestrator] ✅ incident {incident_id} RECOVERED — done")
             # ReportAgent is also subscribed to VALIDATION_RESULT directly,
             # so it will independently log this. We just clean up here.
+            cached["status"] = "RECOVERED"
             self._cleanup(incident_id)
             return
 
@@ -153,6 +155,7 @@ class Orchestrator:
         if retry_count >= MAX_RETRIES:
             # out of retries — escalate
             print(f"[Orchestrator] 🆘 incident {incident_id} ESCALATED after {retry_count} retries")
+            cached["status"] = "ESCALATED"
             # Republish a final VALIDATION_RESULT with ESCALATED so
             # ReportAgent logs it correctly (it only knows RECOVERED/STILL_BROKEN
             # from ValidationAgent, so Orchestrator overrides the final state)
@@ -198,10 +201,22 @@ class Orchestrator:
         Returns details of the most recent in-progress incident,
         or None if nothing is currently active.
         Used by the dashboard's "active incident banner" (Phase 5).
+
+        NOTE: incident_cache entries are never deleted (see _cleanup),
+        so the most-recently-created incident is not necessarily still
+        in progress — it may have already reached a terminal status
+        ("RECOVERED"/"ESCALATED"). We must check that explicitly,
+        otherwise this endpoint would report a long-finished incident
+        as "active" forever until the next fault is detected.
         """
         if not self.incident_cache:
             return None
 
         # get the most recently created incident
         latest_id = list(self.incident_cache.keys())[-1]
-        return {"incident_id": latest_id, **self.incident_cache[latest_id]}
+        latest = self.incident_cache[latest_id]
+
+        if latest.get("status") != "IN_PROGRESS":
+            return None
+
+        return {"incident_id": latest_id, **latest}
