@@ -26,6 +26,11 @@ import time
 import os
 import sys
 
+# See main.py for why this is needed — agents print emoji that crash on
+# Windows' default cp1252 console encoding.
+sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from services.service_manager import ServiceManager

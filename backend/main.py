@@ -13,6 +13,15 @@ Run with:
     uvicorn main:app --reload --port 8000
 Then open http://localhost:8000/docs to test everything interactively.
 """
+import sys
+
+# The agents print status emoji (✅ 🚨 📢 🆘 💥) throughout. Windows' default
+# console codepage (cp1252) can't encode those and crashes the process with
+# UnicodeEncodeError on the first such print — force UTF-8 stdout/stderr
+# before anything else runs, regardless of the terminal's own codepage.
+sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+
 import asyncio
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
