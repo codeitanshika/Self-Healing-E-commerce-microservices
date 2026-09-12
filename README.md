@@ -1,6 +1,6 @@
 # Self-Healing E-Commerce Microservices
 
-> An autonomous system where AI agents detect, diagnose, fix, and verify failures in e-commerce microservices — with zero human intervention and zero paid APIs.
+> Autonomous incident response for e-commerce microservices: AI agents detect, diagnose, fix, and verify failures — closed-loop, with zero human intervention and zero paid APIs.
 
 ![status](https://img.shields.io/badge/status-in%20development-yellow)
 ![python](https://img.shields.io/badge/python-3.11+-blue)
@@ -9,159 +9,159 @@
 
 ---
 
-## 🚀 Live Demo
+## Live Demo
 
 | | URL |
 |---|---|
 | **Dashboard** | https://self-healing-e-commerce-microservices-aax3tmiok-anshika494shiv.vercel.app |
 | **API Docs** | https://self-healing-backend-m1e1.onrender.com/docs |
 
-> Note: First load may take 30-50 seconds as the free backend wakes from sleep.
+> First load may take 30–50 seconds — the free backend tier sleeps after inactivity and needs to wake up.
 
-![dashboard screenshot](assets/dashboard.png)
+<details>
+<summary>Known limitations of the free deployment</summary>
 
-### Known limitations of free deployment
-- Render free tier spins down after 15 minutes of inactivity
-  (first request takes 30-50 seconds to wake up)
-- Background tasks (Monitor Agent) restart on wake-up
-- For best demo experience, run locally with both terminals active
-- The live deployment demonstrates the API and dashboard UI;
-  the full autonomous healing pipeline is best observed locally
-
-## What is this?
-
-Real e-commerce platforms run as many small **microservices** — separate programs for login, cart, payments, inventory, and notifications. In production these services fail constantly: they crash, slow down, leak memory, or start throwing errors.
-
-Today, when that happens, one of two things occurs:
-
-1. **A human gets paged** (PagerDuty/Datadog) and manually diagnoses and fixes it — slow, costs 15–45 minutes of downtime.
-2. **A dumb auto-restart kicks in** (Kubernetes liveness probes) — fast, but blind: it applies the same fix to every problem and never understands why it broke.
-
-This project builds the missing middle: a system that **closes the full loop** — detect → understand → fix → verify → retry-if-needed → log — using AI reasoning and an event-driven multi-agent architecture, runnable on a single laptop for free.
+- Render's free tier spins down after 15 minutes of inactivity (first request takes 30–50s to wake it)
+- Background tasks (the Monitor Agent) restart on wake-up, so recent history may be sparse right after a cold start
+- The live deployment demonstrates the API and dashboard UI end-to-end; for the smoothest view of the full autonomous healing loop, run it locally
+</details>
 
 ---
 
-## Goal
+## What is this?
+
+Real e-commerce platforms run as many small **microservices** — separate programs for login, cart, payments, inventory, and notifications. In production, these fail constantly: they crash, slow down, leak memory, or start throwing errors.
+
+Today, one of two things happens when that occurs:
+
+1. **A human gets paged** (PagerDuty, Datadog) and manually diagnoses and fixes it — slow, and costs 15–45+ minutes of downtime.
+2. **A dumb auto-restart kicks in** (Kubernetes liveness probes) — fast, but blind. It applies the same fix to every problem and never understands *why* it broke.
+
+This project builds the missing middle: a system that closes the full loop —
+
+```
+detect → diagnose → fix → verify → retry if needed → log
+```
+
+— using LLM reasoning and an event-driven multi-agent architecture, runnable on a single laptop for free.
 
 **Research question:**
-> Can a multi-agent, LLM-orchestrated system autonomously detect, diagnose, and recover e-commerce microservice failures faster and more accurately than manual intervention — and what is the measurable reduction in Mean Time To Recovery (MTTR)?
-
-**Engineering goal:** a real, deployable web application (not a throwaway demo) that anyone can clone, run, and watch heal itself live.
+> Can a multi-agent, LLM-orchestrated system autonomously detect, diagnose, and recover microservice failures faster and more accurately than manual intervention — and what is the measurable reduction in Mean Time to Recovery (MTTR)?
 
 ---
 
 ## How it works
-```
-┌──────────────────────────────────────────────────┐
-   │              React Dashboard (frontend)            │
-   │   health tiles · incident log · MTTR chart · etc   │
-   └───────────────────────┬───────────────────────────┘
-                           │  REST + polling (every 3-5s)
-                           ▼
-   ┌──────────────────────────────────────────────────┐
-   │                FastAPI Backend                     │
-   │                                                    │
-   │   5 Simulated Services   ◄──polls──┐               │
-   │   (auth, cart, payment,            │               │
-   │    inventory, notification)   ┌────┴─────┐         │
-   │                               │ Monitor  │         │
-   │                               │  Agent   │         │
-   │                               └────┬─────┘         │
-   │                          ANOMALY_DETECTED          │
-   │                                    ▼               │
-   │                            ┌──────────────┐        │
-   │                            │ Orchestrator │        │
-   │                            │ (event bus + │        │
-   │                            │  retry loop) │        │
-   │                            └──────┬───────┘        │
-   │             ┌─────────────────────┼──────────┐     │
-   │             ▼          ▼           ▼          ▼     │
-   │        Diagnosis     Fix      Validation   Report  │
-   │          Agent      Agent       Agent      Agent   │
-   │         (Groq LLM)                            │     │
-   │                                               ▼     │
-   │                                          SQLite DB  │
-   └──────────────────────────────────────────────────┘
 
+```mermaid
+flowchart TB
+    UI["React Dashboard<br/>health tiles · incident log · MTTR chart"]
+
+    subgraph Backend["FastAPI Backend"]
+        direction TB
+        SVC[("5 Simulated Services<br/>auth · cart · payment · inventory · notification")]
+        MON["Monitor Agent"]
+        ORCH{{"Orchestrator<br/>event bus + retry logic"}}
+        DIAG["Diagnosis Agent<br/>(Groq LLM)"]
+        FIX["Fix Agent"]
+        VAL["Validation Agent"]
+        REP["Report Agent"]
+        DB[("SQLite")]
+
+        MON -- "polls every 5s" --> SVC
+        MON -- "ANOMALY_DETECTED" --> ORCH
+        ORCH --> DIAG
+        DIAG -- "DIAGNOSIS_READY" --> ORCH
+        ORCH --> FIX
+        FIX -- "applies remediation" --> SVC
+        FIX -- "FIX_APPLIED" --> ORCH
+        ORCH --> VAL
+        VAL -- "rechecks health" --> SVC
+        VAL -- "VALIDATION_RESULT" --> ORCH
+        ORCH -. "still broken → retry (max 2x)" .-> FIX
+        ORCH --> REP
+        REP -- "INCIDENT_LOGGED" --> DB
+    end
+
+    UI -- "REST polling, 3-5s" --> SVC
 ```
+
 **Key design choice:** agents never call each other directly. They publish and subscribe to events on a lightweight in-process event bus — our own replacement for enterprise tools like Solace Agent Mesh. This keeps the system decoupled, testable, and is itself part of the research contribution.
 
 ### The 5 agents
 
 | Agent | Does | Publishes |
 |---|---|---|
-| **Monitor** | Polls services every 5s, flags anomalies | `ANOMALY_DETECTED` |
-| **Diagnosis** | Sends metrics to Groq LLM, gets root cause + fix | `DIAGNOSIS_READY` |
+| **Monitor** | Polls every service every 5s, flags anomalies against thresholds | `ANOMALY_DETECTED` |
+| **Diagnosis** | Sends metrics to a Groq LLM, gets back root cause + confidence + fix | `DIAGNOSIS_READY` |
 | **Fix** | Executes the chosen remediation action | `FIX_APPLIED` |
-| **Validation** | Re-checks service — did it recover? | `VALIDATION_RESULT` |
-| **Report** | Writes incident + MTTR to database | `INCIDENT_LOGGED` |
+| **Validation** | Re-checks the service — did it actually recover? | `VALIDATION_RESULT` |
+| **Report** | Writes the incident + MTTR to the database | `INCIDENT_LOGGED` |
 
-The **Orchestrator** sequences these agents and handles the retry loop (up to 2 retries, then escalates).
+The **Orchestrator** sequences these agents end-to-end and owns the retry loop (up to 2 retries with an alternate fix, then escalates).
 
 ---
 
-## Why this is different from existing tools
+## Why this is different
 
-| Tool | What it does | What it is missing |
+| Tool | What it does | What it's missing |
 |---|---|---|
 | Datadog / PagerDuty | Detects and alerts a human | Human still diagnoses and fixes manually |
-| Kubernetes probes | Auto-restarts blindly | No root cause understanding, same fix every time |
+| Kubernetes probes | Auto-restarts blindly | No root-cause understanding, same fix every time |
 | RCAgent / OpenRCA | LLM diagnoses the root cause | Never acts on the diagnosis, never verifies |
-| **This project** | Detects, diagnoses, fixes, verifies, retries | Nothing — this closes the full loop |
+| **This project** | Detects → diagnoses → fixes → verifies → retries | Closes the full loop, autonomously |
 
 ---
 
-## Tech Stack
+## Tech stack
 
 | Layer | Technology | Why |
 |---|---|---|
-| Frontend | React 18 + Vite + Tailwind CSS | Real, professional, portfolio-grade UI |
-| Charts | Recharts | Clean React-native charts |
+| Frontend | React 18 + Vite + Tailwind CSS | Fast, modern, portfolio-grade UI |
+| Charts | Recharts | Clean, React-native charting |
 | Backend | Python 3.11 + FastAPI | Async, fast, industry standard |
-| AI / LLM | Groq API (open-weight models — default `openai/gpt-oss-120b`, validated against `gpt-oss-20b` and `qwen3.8-27b` too) — FREE | No credit card, generous free tier, not locked to one model |
-| Event bus | Custom async pub/sub (our own code) | Free, fully understood, research-novel |
+| AI / LLM | Groq API — open-weight models (`openai/gpt-oss-120b` default, validated against `gpt-oss-20b` and `qwen3.8-27b`) | Free, no credit card, not locked to one model |
+| Event bus | Custom async pub/sub | No external broker needed, fully understood, research-novel |
 | Database | SQLite + SQLModel | Zero-setup, file-based |
 | Deployment | Render (backend) + Vercel (frontend) | Both free tiers |
 
-> No paid services anywhere. Groq replaces the paid Anthropic API. Our own event bus replaces Solace Agent Mesh.
+> No paid services anywhere. Groq replaces the paid Anthropic API; a hand-built event bus replaces enterprise tools like Solace Agent Mesh.
 
 ---
 
-## Repository Structure
----
+## Repository structure
+
 ```
 self-healing-ecommerce/
 ├── backend/
-│   ├── services/            # simulated service state + fault injection (service_manager.py)
-│   ├── agents/               # monitor, diagnosis, fix, validation, report (+ rule-based baseline)
-│   ├── orchestrator/         # event bus + orchestrator + retry logic
-│   ├── shared/                # config, event topics, Groq LLM client
-│   ├── database/              # SQLite models + queries
-│   ├── experiments/            # automated multi-model experiment runner + raw/summary CSVs
-│   ├── fault_injector/          # (reserved) — faults are currently triggered via the
-│   │                             #  POST /api/services/{name}/fault/{fault_type} route
-│   ├── main.py                 # FastAPI entry point
+│   ├── services/           # simulated service state + fault injection (service_manager.py)
+│   ├── agents/              # monitor, diagnosis, fix, validation, report + rule-based baseline
+│   ├── orchestrator/        # event bus + orchestrator + retry logic
+│   ├── shared/               # config, event topics, Groq LLM client
+│   ├── database/             # SQLite models + queries
+│   ├── experiments/           # automated multi-model benchmark runner + result CSVs
+│   ├── main.py                # FastAPI entry point
 │   ├── requirements.txt
-│   ├── .env.example
-│   └── .env                    # (not committed)
-├── frontend/                    # React + Vite dashboard
+│   └── .env.example
+├── frontend/
 │   └── src/
-│       ├── components/          # HealthTiles, IncidentTable, MttrChart, StatsCards
-│       ├── usePolling.js         # polling hook
+│       ├── components/        # HealthTiles, IncidentTable, MttrChart, StatsCards
+│       ├── usePolling.js       # polling hook
 │       └── App.jsx
-├── docs/                         # architecture, build plan, research paper, experiment results
-│   └── results/                   # model-comparison.md, retry-loop-test.md, and archived runs
-├── assets/                        # README images
-├── .gitignore
+├── docs/
+│   └── results/                # model-comparison.md, retry-loop-test.md, archived runs
 └── README.md
 ```
 
-## Installation
+Faults are triggered via `POST /api/services/{name}/fault/{fault_type}` — there's no separate CLI script; the dashboard's sidebar and the experiment runner both call this same route.
+
+---
+
+## Getting started
 
 ### Prerequisites
 - Python 3.11+
 - Node.js 18+
-- Free Groq API key from [console.groq.com](https://console.groq.com) (no card required)
+- A free Groq API key from [console.groq.com](https://console.groq.com) — no card required
 
 ### Backend
 ```bash
@@ -182,59 +182,45 @@ npm run dev
 
 Dashboard runs at `http://localhost:5173`.
 
-### Triggering a fault manually
-With the backend running, break a service on purpose and watch the agents heal it:
+### Trigger a fault manually
 ```bash
 curl -X POST http://localhost:8000/api/services/payment/fault/crash
 ```
-`fault_type` is one of `crash | slow | memory | error`. The same route is what the dashboard's sidebar calls during a live demo. Watch the terminal (or `GET /api/events`) to see `ANOMALY_DETECTED → DIAGNOSIS_READY → FIX_APPLIED → VALIDATION_RESULT → INCIDENT_LOGGED` fire in sequence.
+`fault_type` is one of `crash | slow | memory | error`. Watch the backend terminal (or `GET /api/events`) to see the full loop fire: `ANOMALY_DETECTED → DIAGNOSIS_READY → FIX_APPLIED → VALIDATION_RESULT → INCIDENT_LOGGED`.
 
-### Running the experiment suite
-The same pipeline can be driven headlessly (no dashboard) to benchmark diagnosis accuracy and MTTR across models:
+### Run the experiment suite
+Benchmark diagnosis accuracy and MTTR headlessly, across models:
 ```bash
 cd backend
 python -m experiments.run_experiments openai/gpt-oss-120b
 ```
-This runs 20 fault scenarios × 3 trials against the given Groq model and the rule-based baseline, writing per-trial and summary CSVs to `backend/experiments/`. See [`docs/results/model-comparison.md`](docs/results/model-comparison.md) for published results across three models.
+Runs 20 fault scenarios × 3 trials against the given Groq model and the rule-based baseline, writing per-trial and summary CSVs to `backend/experiments/`.
 
 ---
 
-## Documentation
+## Research findings
 
-| Doc | What's in it |
-|---|---|
-| [`docs/architecture.md`](docs/architecture.md) | System design in detail |
-| [`docs/research-paper.md`](docs/research-paper.md) | Public paper outline and methodology |
-| [`docs/results/model-comparison.md`](docs/results/model-comparison.md) | Multi-model accuracy/MTTR comparison (Sept 2026 re-run) |
-| [`docs/results/retry-loop-test.md`](docs/results/retry-loop-test.md) | Verification of the retry/escalation logic, including a feedback-loop bug found and fixed |
-| [`backend/experiments/findings.md`](backend/experiments/findings.md) | Full experiment write-up: setup, per-fault-type breakdown, limitations |
-| [`docs/setup-guide.md`](docs/setup-guide.md) | Build-from-scratch setup walkthrough |
-| [`docs/progress-tracker.md`](docs/progress-tracker.md) | Phase-by-phase build status |
-
-> `docs/paper.md` (the unpublished full paper draft) is intentionally excluded from version control until it's published — see `.gitignore`.
-
----
-
-## Research Findings So Far
-
-Latest experiment run (Sept 2026, 180 trials across 3 free Groq models):
+Latest run (September 2026, 180 trials across 3 free Groq models):
 
 | Metric | Result |
 |---|---|
 | LLM diagnosis accuracy (pooled) | 99.4% (179/180) |
 | Rule-based baseline accuracy | 100% (180/180) |
-| Mean MTTR | 3.20s vs. 900s manual baseline (~99.6% reduction) |
+| Mean MTTR | 3.20s vs. a 900s manual baseline (~99.6% reduction) |
 | Model dependency | Accuracy held up across all 3 models tested — not locked to one vendor's model |
 
-Full breakdown, per-model numbers, and honest caveats (e.g. why "recovery rate" isn't yet a fix-sensitive metric) are in [`docs/results/model-comparison.md`](docs/results/model-comparison.md) and [`backend/experiments/findings.md`](backend/experiments/findings.md).
+The one LLM miss was a transient API/JSON-parsing failure caught by the system's safe-default fallback, not a reasoning error. Full breakdown, per-model numbers, and honest caveats (e.g. why "recovery rate" isn't yet a fix-sensitive metric) live in [`docs/results/model-comparison.md`](docs/results/model-comparison.md) and [`backend/experiments/findings.md`](backend/experiments/findings.md).
 
----
+This project targets a publishable paper — the contribution is a lightweight, event-driven, LLM-diagnosed closed-loop self-healing system, runnable on commodity hardware at zero API cost, evaluated against a manual-response baseline on a reproducible testbed. Outline and methodology: [`docs/research-paper.md`](docs/research-paper.md).
 
-## Research Paper
+### Further reading
 
-This project targets a publishable paper. The novel contribution is a lightweight, event-driven, LLM-diagnosed closed-loop self-healing system for microservices — runnable on commodity hardware at zero API cost — evaluated against a manual-response baseline on a reproducible testbed.
-
-Full paper outline and methodology in [`docs/research-paper.md`](docs/research-paper.md).
+| Doc | What's in it |
+|---|---|
+| [`docs/architecture.md`](docs/architecture.md) | System design in detail |
+| [`docs/results/retry-loop-test.md`](docs/results/retry-loop-test.md) | Verification of the retry/escalation logic, including a feedback-loop bug found and fixed |
+| [`docs/setup-guide.md`](docs/setup-guide.md) | Build-from-scratch setup walkthrough |
+| [`docs/progress-tracker.md`](docs/progress-tracker.md) | Phase-by-phase build status |
 
 ---
 
