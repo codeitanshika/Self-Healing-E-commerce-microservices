@@ -54,38 +54,32 @@ detect → diagnose → fix → verify → retry if needed → log
 
 ```mermaid
 flowchart TB
-    UI["React Dashboard<br/>health tiles · incident log · MTTR chart"]
+    UI["React Dashboard<br/>health tiles, incident log, MTTR chart"]
+    SVC[("5 Simulated Services<br/>auth, cart, payment, inventory, notification")]
+    MON["Monitor Agent"]
+    ORCH["Orchestrator<br/>event bus + retry logic"]
+    DIAG["Diagnosis Agent<br/>Groq LLM"]
+    FIX["Fix Agent"]
+    VAL["Validation Agent"]
+    REP["Report Agent"]
+    DB[("SQLite")]
 
-    subgraph Backend["FastAPI Backend"]
-        direction TB
-        SVC[("5 Simulated Services<br/>auth · cart · payment · inventory · notification")]
-        MON["Monitor Agent"]
-        ORCH{{"Orchestrator<br/>event bus + retry logic"}}
-        DIAG["Diagnosis Agent<br/>(Groq LLM)"]
-        FIX["Fix Agent"]
-        VAL["Validation Agent"]
-        REP["Report Agent"]
-        DB[("SQLite")]
-
-        MON -- "polls every 5s" --> SVC
-        MON -- "ANOMALY_DETECTED" --> ORCH
-        ORCH --> DIAG
-        DIAG -- "DIAGNOSIS_READY" --> ORCH
-        ORCH --> FIX
-        FIX -- "applies remediation" --> SVC
-        FIX -- "FIX_APPLIED" --> ORCH
-        ORCH --> VAL
-        VAL -- "rechecks health" --> SVC
-        VAL -- "VALIDATION_RESULT" --> ORCH
-        ORCH -. "still broken → retry (max 2x)" .-> FIX
-        ORCH --> REP
-        REP -- "INCIDENT_LOGGED" --> DB
-    end
-
-    UI -- "REST polling, 3-5s" --> SVC
+    UI -->|"REST polling, 3-5s"| SVC
+    MON -->|"polls every 5s"| SVC
+    MON -->|"ANOMALY_DETECTED"| ORCH
+    ORCH --> DIAG
+    DIAG -->|"DIAGNOSIS_READY"| ORCH
+    ORCH --> FIX
+    FIX -->|"applies remediation"| SVC
+    FIX -->|"FIX_APPLIED"| ORCH
+    ORCH --> VAL
+    VAL -->|"rechecks health"| SVC
+    VAL -->|"VALIDATION_RESULT"| ORCH
+    ORCH --> REP
+    REP -->|"INCIDENT_LOGGED"| DB
 ```
 
-**Key design choice:** agents never call each other directly. They publish and subscribe to events on a lightweight in-process event bus — our own replacement for enterprise tools like Solace Agent Mesh. This keeps the system decoupled, testable, and is itself part of the research contribution.
+**Key design choice:** agents never call each other directly. They publish and subscribe to events on a lightweight in-process event bus — our own replacement for enterprise tools like Solace Agent Mesh. This keeps the system decoupled, testable, and is itself part of the research contribution. If validation reports the service is still broken, the Orchestrator retries with an alternate fix (up to 2 times) before escalating.
 
 ### The 5 agents
 
