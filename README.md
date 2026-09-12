@@ -18,6 +18,8 @@
 
 > Note: First load may take 30-50 seconds as the free backend wakes from sleep.
 
+![dashboard screenshot](assets/dashboard.png)
+
 ### Known limitations of free deployment
 - Render free tier spins down after 15 minutes of inactivity
   (first request takes 30-50 seconds to wake up)
@@ -116,7 +118,7 @@ The **Orchestrator** sequences these agents and handles the retry loop (up to 2 
 | Frontend | React 18 + Vite + Tailwind CSS | Real, professional, portfolio-grade UI |
 | Charts | Recharts | Clean React-native charts |
 | Backend | Python 3.11 + FastAPI | Async, fast, industry standard |
-| AI / LLM | Groq API (open-weight model, default `openai/gpt-oss-120b`) — FREE | No credit card, generous free tier |
+| AI / LLM | Groq API (open-weight models — default `openai/gpt-oss-120b`, validated against `gpt-oss-20b` and `qwen3.8-27b` too) — FREE | No credit card, generous free tier, not locked to one model |
 | Event bus | Custom async pub/sub (our own code) | Free, fully understood, research-novel |
 | Database | SQLite + SQLModel | Zero-setup, file-based |
 | Deployment | Render (backend) + Vercel (frontend) | Both free tiers |
@@ -130,22 +132,26 @@ The **Orchestrator** sequences these agents and handles the retry loop (up to 2 
 ```
 self-healing-ecommerce/
 ├── backend/
-│   ├── services/          # 5 simulated microservices
-│   ├── agents/             # monitor, diagnosis, fix, validation, report
-│   ├── orchestrator/       # event bus + orchestrator + retry logic
-│   ├── shared/             # config, models, event topic definitions
-│   ├── database/           # SQLite setup
-│   ├── fault_injector/     # script to manually break services
-│   ├── main.py             # FastAPI entry point
+│   ├── services/            # simulated service state + fault injection (service_manager.py)
+│   ├── agents/               # monitor, diagnosis, fix, validation, report (+ rule-based baseline)
+│   ├── orchestrator/         # event bus + orchestrator + retry logic
+│   ├── shared/                # config, event topics, Groq LLM client
+│   ├── database/              # SQLite models + queries
+│   ├── experiments/            # automated multi-model experiment runner + raw/summary CSVs
+│   ├── fault_injector/          # (reserved) — faults are currently triggered via the
+│   │                             #  POST /api/services/{name}/fault/{fault_type} route
+│   ├── main.py                 # FastAPI entry point
 │   ├── requirements.txt
 │   ├── .env.example
-│   └── .env                # (not committed)
-├── frontend/                # React + Vite dashboard (Phase 5)
+│   └── .env                    # (not committed)
+├── frontend/                    # React + Vite dashboard
 │   └── src/
-│       ├── components/      # HealthTile, IncidentTable, charts...
-│       ├── hooks/            # usePolling
+│       ├── components/          # HealthTiles, IncidentTable, MttrChart, StatsCards
+│       ├── usePolling.js         # polling hook
 │       └── App.jsx
-├── docs/                    # architecture, build plan, research paper, etc.
+├── docs/                         # architecture, build plan, research paper, experiment results
+│   └── results/                   # model-comparison.md, retry-loop-test.md, and archived runs
+├── assets/                        # README images
 ├── .gitignore
 └── README.md
 ```
@@ -176,8 +182,53 @@ npm run dev
 
 Dashboard runs at `http://localhost:5173`.
 
+### Triggering a fault manually
+With the backend running, break a service on purpose and watch the agents heal it:
+```bash
+curl -X POST http://localhost:8000/api/services/payment/fault/crash
+```
+`fault_type` is one of `crash | slow | memory | error`. The same route is what the dashboard's sidebar calls during a live demo. Watch the terminal (or `GET /api/events`) to see `ANOMALY_DETECTED → DIAGNOSIS_READY → FIX_APPLIED → VALIDATION_RESULT → INCIDENT_LOGGED` fire in sequence.
+
+### Running the experiment suite
+The same pipeline can be driven headlessly (no dashboard) to benchmark diagnosis accuracy and MTTR across models:
+```bash
+cd backend
+python -m experiments.run_experiments openai/gpt-oss-120b
+```
+This runs 20 fault scenarios × 3 trials against the given Groq model and the rule-based baseline, writing per-trial and summary CSVs to `backend/experiments/`. See [`docs/results/model-comparison.md`](docs/results/model-comparison.md) for published results across three models.
+
 ---
 
+## Documentation
+
+| Doc | What's in it |
+|---|---|
+| [`docs/architecture.md`](docs/architecture.md) | System design in detail |
+| [`docs/research-paper.md`](docs/research-paper.md) | Public paper outline and methodology |
+| [`docs/results/model-comparison.md`](docs/results/model-comparison.md) | Multi-model accuracy/MTTR comparison (Sept 2026 re-run) |
+| [`docs/results/retry-loop-test.md`](docs/results/retry-loop-test.md) | Verification of the retry/escalation logic, including a feedback-loop bug found and fixed |
+| [`backend/experiments/findings.md`](backend/experiments/findings.md) | Full experiment write-up: setup, per-fault-type breakdown, limitations |
+| [`docs/setup-guide.md`](docs/setup-guide.md) | Build-from-scratch setup walkthrough |
+| [`docs/progress-tracker.md`](docs/progress-tracker.md) | Phase-by-phase build status |
+
+> `docs/paper.md` (the unpublished full paper draft) is intentionally excluded from version control until it's published — see `.gitignore`.
+
+---
+
+## Research Findings So Far
+
+Latest experiment run (Sept 2026, 180 trials across 3 free Groq models):
+
+| Metric | Result |
+|---|---|
+| LLM diagnosis accuracy (pooled) | 99.4% (179/180) |
+| Rule-based baseline accuracy | 100% (180/180) |
+| Mean MTTR | 3.20s vs. 900s manual baseline (~99.6% reduction) |
+| Model dependency | Accuracy held up across all 3 models tested — not locked to one vendor's model |
+
+Full breakdown, per-model numbers, and honest caveats (e.g. why "recovery rate" isn't yet a fix-sensitive metric) are in [`docs/results/model-comparison.md`](docs/results/model-comparison.md) and [`backend/experiments/findings.md`](backend/experiments/findings.md).
+
+---
 
 ## Research Paper
 
