@@ -110,7 +110,7 @@ No fixed calendar. Each phase ends with **(a) something that runs** and **(b) a 
 **Goal:** live URL, real results, written paper.
 
 1. **Deploy:** backend to Render (free), frontend to Vercel (free). Set `GROQ_API_KEY` and CORS for the deployed frontend origin. (Steps in `setup-guide.md`.)
-2. **Experiments:** run 15–20 fault scenarios (mix of 5 services × 5 fault types). For each, record: detection time, whether the LLM named the actually-injected fault (diagnosis accuracy), first-try vs retry, total MTTR.
+2. **Experiments:** run the 20 fault scenarios (5 services × 4 fault types). For each, record: detection time, whether the LLM named the actually-injected fault (diagnosis accuracy), first-try vs retry, total MTTR.
 3. **Analysis:** build the MTTR-vs-baseline table, diagnosis-accuracy %, total revenue protected; generate charts.
 4. **Paper:** fill in the outline in `research-paper.md` with your numbers.
 5. **Final commit + tag:** `release: v1.0 — full system, deployed, evaluated`
