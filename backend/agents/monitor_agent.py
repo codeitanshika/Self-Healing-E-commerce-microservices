@@ -68,8 +68,18 @@ class MonitorAgent:
         """
         Reads health of every service and decides
         whether to publish an anomaly.
+
+        Anomalies are published concurrently (asyncio.gather), not
+        awaited one at a time in the loop below. publish() for
+        ANOMALY_DETECTED awaits the Orchestrator's handler, which in
+        turn awaits the full diagnose -> fix -> validate chain for
+        that incident — so awaiting each _publish_anomaly() call
+        sequentially would make service #2's healing wait for
+        service #1's entire pipeline (LLM call included) to finish
+        first, even though they're unrelated incidents.
         """
         all_health = self.service_manager.get_all_health()
+        pending_anomalies = []
 
         for name, health in all_health["services"].items():
             anomaly = self._detect_anomaly(health)
@@ -78,7 +88,7 @@ class MonitorAgent:
                 if name not in self.active_anomalies:
                     # new anomaly — report it
                     self.active_anomalies.add(name)
-                    await self._publish_anomaly(name, anomaly, health)
+                    pending_anomalies.append(self._publish_anomaly(name, anomaly, health))
                 else:
                     # already reported this one — stay quiet
                     print(f"[MonitorAgent] {name} still anomalous ({anomaly}) — waiting for fix")
@@ -87,6 +97,9 @@ class MonitorAgent:
                     # service recovered (healed externally or manually)
                     self.active_anomalies.discard(name)
                     print(f"[MonitorAgent] ✅ {name} back to healthy")
+
+        if pending_anomalies:
+            await asyncio.gather(*pending_anomalies)
 
     # ────────────────────────────────────────────────────────────
     # DETECT ANOMALY

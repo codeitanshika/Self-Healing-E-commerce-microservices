@@ -45,7 +45,7 @@ class DiagnosisAgent:
 
         print(f"[DiagnosisAgent] diagnosing {service}...")
 
-        diagnosis = self.diagnose(service, metrics)
+        diagnosis = await self.diagnose(service, metrics)
 
         print(f"[DiagnosisAgent] {service} → {diagnosis['root_cause']} "
               f"(confidence {diagnosis['confidence']}%) → fix: {diagnosis['fix']}")
@@ -66,14 +66,14 @@ class DiagnosisAgent:
     # CORE LOGIC — build prompt, call LLM
     # ────────────────────────────────────────────────────────────
 
-    def diagnose(self, service: str, metrics: dict) -> dict:
+    async def diagnose(self, service: str, metrics: dict) -> dict:
         """
         Builds the prompt and calls the LLM.
         Separated from the event handler so we can test it directly
         with hardcoded metrics (see __main__ block below).
         """
         prompt = self._build_prompt(service, metrics)
-        return ask_llm(prompt)
+        return await ask_llm(prompt)
 
     def _build_prompt(self, service: str, metrics: dict) -> str:
         """
@@ -127,6 +127,8 @@ Reply with ONLY this JSON, no other text, no markdown formatting:
 # ────────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
+    import asyncio
+
     agent = DiagnosisAgent()
 
     # 5 test scenarios — one per fault type, matching code-standards.md
@@ -147,7 +149,10 @@ if __name__ == "__main__":
          "error_rate": 0.55, "memory_percent": 42, "cpu_percent": 60}},
     ]
 
-    for case in test_cases:
-        print(f"\n--- Testing {case['service']} ---")
-        result = agent.diagnose(case["service"], case["metrics"])
-        print(result)
+    async def _run_tests():
+        for case in test_cases:
+            print(f"\n--- Testing {case['service']} ---")
+            result = await agent.diagnose(case["service"], case["metrics"])
+            print(result)
+
+    asyncio.run(_run_tests())

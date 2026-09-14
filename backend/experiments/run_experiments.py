@@ -87,7 +87,7 @@ async def run_single_experiment(manager, scenario, diagnosis_agent, trial: int):
     detected_at = time.time()
     metrics = manager.get_service_metrics(service)
 
-    llm_result = diagnosis_agent.diagnose(service, metrics)
+    llm_result = await diagnosis_agent.diagnose(service, metrics)
     llm_correct = llm_result["root_cause"] == expected
 
     rule_result = rule_based_diagnose(service, metrics)

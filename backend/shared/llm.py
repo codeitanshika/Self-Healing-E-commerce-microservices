@@ -12,6 +12,7 @@ Why centralize this?
 
 import os
 import json
+import asyncio
 from dotenv import load_dotenv
 from groq import Groq
 
@@ -21,7 +22,7 @@ client = Groq(api_key=os.getenv("GROQ_API_KEY"))
 MODEL = os.getenv("GROQ_MODEL", "openai/gpt-oss-120b")
 
 
-def ask_llm(prompt: str) -> dict:
+async def ask_llm(prompt: str) -> dict:
     """
     Sends a prompt to Groq and returns a parsed JSON dict.
 
@@ -29,9 +30,17 @@ def ask_llm(prompt: str) -> dict:
     If the LLM call fails, or returns text that isn't valid JSON,
     we return a safe default instead of crashing the whole agent.
     This matches the rule in code-standards.md.
+
+    The Groq client is synchronous (blocking network I/O). Run it in
+    a worker thread via asyncio.to_thread so a slow/rate-limited call
+    for one incident doesn't freeze the whole event loop — otherwise
+    every other agent, every other in-flight incident, and the
+    FastAPI routes the dashboard polls all stall until this one
+    call returns.
     """
     try:
-        response = client.chat.completions.create(
+        response = await asyncio.to_thread(
+            client.chat.completions.create,
             model=MODEL,
             messages=[{"role": "user", "content": prompt}],
             max_tokens=400,
