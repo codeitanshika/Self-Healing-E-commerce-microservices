@@ -6,7 +6,11 @@ services:
       - "8080:80"
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "wget", "--spider", "-q", "http://localhost"]
+      # nginx:stable (Debian-based) ships curl but not wget - the
+      # original wget-based check silently failed with "executable
+      # not found" and reported false UNHEALTHY on an otherwise
+      # perfectly healthy container. Verified against the real image.
+      test: ["CMD", "curl", "-f", "-s", "http://localhost"]
       interval: 10s
       timeout: 5s
       retries: 3
