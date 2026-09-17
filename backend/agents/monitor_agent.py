@@ -77,8 +77,16 @@ class MonitorAgent:
         sequentially would make service #2's healing wait for
         service #1's entire pipeline (LLM call included) to finish
         first, even though they're unrelated incidents.
+
+        get_all_health() itself is also run off the event loop via
+        asyncio.to_thread: since DockerService.get_health() makes a
+        real (short-timeout) HTTP probe against the Nginx container,
+        calling it synchronously here would block every other agent
+        and FastAPI route for up to that timeout on every poll cycle
+        — the same class of bug fixed for the blocking LLM call in
+        shared/llm.py, just smaller in magnitude.
         """
-        all_health = self.service_manager.get_all_health()
+        all_health = await asyncio.to_thread(self.service_manager.get_all_health)
         pending_anomalies = []
 
         for name, health in all_health["services"].items():

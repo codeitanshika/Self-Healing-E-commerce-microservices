@@ -19,6 +19,20 @@ SERVICES = {
     "notification": {"port": 8005, "description": "Order emails and SMS alerts"},
 }
 
+# ── Real, Docker-managed services ────────────────────────────────
+# Backed by an actual container (services/docker_service.py), not by
+# SimulatedService. Kept separate from SERVICES above since these
+# need different constructor arguments — a container name and a
+# real URL, not a simulated port. Started via `docker compose up -d`
+# (see docker-compose.yml at the repo root).
+DOCKER_MANAGED_SERVICES = {
+    "nginx": {
+        "container_name": "monitored-nginx",
+        "url": "http://localhost:8080",
+        "description": "Real Nginx web server (Docker-managed)",
+    },
+}
+
 # ── Fault types ─────────────────────────────────────────────────
 # These are the 4 ways a service can break in our simulation.
 FAULT_TYPES = ["crash", "slow", "memory", "error"]

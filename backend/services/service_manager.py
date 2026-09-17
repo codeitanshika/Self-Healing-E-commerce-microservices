@@ -16,24 +16,39 @@ They never touch SimulatedService directly — always go through here.
 
 import time
 from services.simulated_service import SimulatedService
-from shared.config import SERVICES, FAULT_TYPES
+from services.docker_service import DockerService
+from shared.config import SERVICES, FAULT_TYPES, DOCKER_MANAGED_SERVICES
 
 
 class ServiceManager:
     """
-    Single point of control for all 5 microservices.
+    Single point of control for every service, simulated or real.
     Created once when the FastAPI app starts and lives for
     the entire lifetime of the application.
+
+    Every method below is polymorphic over what's actually in
+    self.services — a SimulatedService or a DockerService both
+    expose get_health()/inject_fault()/heal(), so nothing here (or
+    in any agent) needs to know or care which one it's talking to.
     """
 
     def __init__(self):
-        # Create all 5 services using the config we defined
-        self.services: dict[str, SimulatedService] = {}
+        # Create all simulated services using the config we defined
+        self.services: dict[str, SimulatedService | DockerService] = {}
 
         for name, info in SERVICES.items():
             self.services[name] = SimulatedService(
                 name=name,
                 port=info["port"],
+                description=info["description"],
+            )
+
+        # Plus any real, Docker-managed services (see config.py)
+        for name, info in DOCKER_MANAGED_SERVICES.items():
+            self.services[name] = DockerService(
+                name=name,
+                container_name=info["container_name"],
+                url=info["url"],
                 description=info["description"],
             )
 
