@@ -1,0 +1,13 @@
+services:
+  monitored-nginx:
+    image: nginx:stable
+    container_name: monitored-nginx
+    ports:
+      - "8080:80"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
