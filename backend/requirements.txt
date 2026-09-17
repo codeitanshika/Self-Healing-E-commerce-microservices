@@ -5,3 +5,4 @@ psutil
 groq
 python-dotenv
 sqlmodel
+docker
