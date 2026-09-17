@@ -43,14 +43,23 @@ class ServiceManager:
                 description=info["description"],
             )
 
-        # Plus any real, Docker-managed services (see config.py)
+        # Plus any real, Docker-managed services (see config.py) — but
+        # only if a Docker daemon is actually reachable right now. An
+        # environment with no Docker at all (e.g. a Render free-tier
+        # deploy) falls back to the simulated-only service set instead
+        # of registering a sixth tile that could never recover and
+        # would sit permanently ESCALATED.
         for name, info in DOCKER_MANAGED_SERVICES.items():
-            self.services[name] = DockerService(
+            docker_service = DockerService(
                 name=name,
                 container_name=info["container_name"],
                 url=info["url"],
                 description=info["description"],
             )
+            if docker_service.is_available():
+                self.services[name] = docker_service
+            else:
+                print(f"⚠️  Docker unavailable — skipping real service '{name}' for this run")
 
         print(f"✅ ServiceManager: {len(self.services)} services initialized")
 

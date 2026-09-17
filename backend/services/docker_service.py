@@ -80,6 +80,24 @@ class DockerService:
             except DockerException:
                 self._client = None  # Docker Desktop not running — degrade, don't crash
 
+    def is_available(self) -> bool:
+        """
+        True only if a real Docker daemon actually answers right now —
+        not just that a client object was constructed. docker.from_env()
+        doesn't contact the daemon, so a dead/absent daemon only
+        surfaces on a real call like ping(). ServiceManager uses this
+        at startup to decide whether to register this service at all:
+        environments with no Docker (e.g. a Render free-tier deploy)
+        should fall back to the simulated-only service set rather than
+        show a sixth tile that can never recover.
+        """
+        if self._client is None:
+            return False
+        try:
+            return bool(self._client.ping())
+        except DockerException:
+            return False
+
     # ────────────────────────────────────────────────────────────
     # GET HEALTH
     # ────────────────────────────────────────────────────────────
