@@ -17,6 +17,19 @@ function App() {
   const [selectedService, setSelectedService] = useState("payment");
   const [selectedFault, setSelectedFault] = useState("crash");
 
+  // nginx is a real Docker-managed container, not a simulated service —
+  // only "crash" (stopping the real container) has an honest equivalent
+  // for it. See backend/services/docker_service.py.
+  const faultOptions =
+    selectedService === "nginx"
+      ? ["crash"]
+      : ["crash", "slow", "memory", "error"];
+
+  const handleServiceChange = (name) => {
+    setSelectedService(name);
+    if (name === "nginx") setSelectedFault("crash");
+  };
+
   const injectFault = async () => {
     try {
       await fetch(
@@ -57,7 +70,7 @@ function App() {
                 </label>
                 <select
                   value={selectedService}
-                  onChange={(e) => setSelectedService(e.target.value)}
+                  onChange={(e) => handleServiceChange(e.target.value)}
                   className="form-select"
                   style={{ minWidth: "150px" }}
                 >
@@ -66,6 +79,7 @@ function App() {
                   <option value="payment">payment</option>
                   <option value="inventory">inventory</option>
                   <option value="notification">notification</option>
+                  <option value="nginx">nginx (real container)</option>
                 </select>
               </div>
               <div>
@@ -78,10 +92,9 @@ function App() {
                   className="form-select"
                   style={{ minWidth: "150px" }}
                 >
-                  <option value="crash">crash</option>
-                  <option value="slow">slow</option>
-                  <option value="memory">memory</option>
-                  <option value="error">error</option>
+                  {faultOptions.map((f) => (
+                    <option key={f} value={f}>{f}</option>
+                  ))}
                 </select>
               </div>
               <button
