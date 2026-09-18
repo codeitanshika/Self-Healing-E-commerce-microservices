@@ -10,8 +10,17 @@ This file:
 4. Will later start all agent async tasks on startup (Phase 2+)
 
 Run with:
-    uvicorn main:app --reload --port 8000
+    uvicorn main:app --reload --reload-exclude "*.db" --port 8000
 Then open http://localhost:8000/docs to test everything interactively.
+
+Why --reload-exclude "*.db": without it, --reload watches the whole
+backend/ directory including database/incidents.db. The Report Agent
+writes to that file on every incident, which triggers a reload, which
+wipes MonitorAgent's in-memory active_anomalies set, so any
+still-unhealthy service is immediately re-detected as brand new,
+re-diagnosed, re-logged - triggering another reload. If a service is
+ever stuck unhealthy, this is a real, self-sustaining restart loop,
+not just a cosmetic annoyance - confirmed by reproducing it directly.
 """
 import sys
 

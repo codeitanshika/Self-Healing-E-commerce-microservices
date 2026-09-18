@@ -6,7 +6,7 @@
 
 ## FastAPI + Uvicorn
 **Install:** `pip install fastapi "uvicorn[standard]"`
-**Run:** `uvicorn main:app --reload --port 8000`
+**Run:** `uvicorn main:app --reload --reload-exclude "*.db" --port 8000` (the exclude stops SQLite writes from triggering their own reload loop — see main.py's docstring)
 ```python
 from fastapi import FastAPI
 app = FastAPI()

@@ -164,8 +164,10 @@ python -m venv venv
 source venv/bin/activate        # Windows: venv\Scripts\activate
 pip install -r requirements.txt
 cp .env.example .env            # paste your GROQ_API_KEY into .env
-uvicorn main:app --reload --port 8000
+uvicorn main:app --reload --reload-exclude "*.db" --port 8000
 ```
+
+The `--reload-exclude "*.db"` matters: without it, `--reload` also watches `database/incidents.db`, which the Report Agent writes to on every incident. If a service is ever stuck unhealthy, that turns into a real restart loop — each write triggers a reload, which wipes the Monitor's "already reported this" state, so the same problem gets rediagnosed and re-logged immediately, triggering another reload.
 
 ### Frontend
 ```bash
