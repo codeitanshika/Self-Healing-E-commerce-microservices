@@ -38,3 +38,15 @@ def test_rate_limit_kicks_in(client, monkeypatch):
     codes = [client.post("/api/services/cart/heal", headers=h).status_code for _ in range(5)]
     assert codes[:3] == [200, 200, 200]
     assert 429 in codes[3:]
+
+
+def test_scenarios_listed_and_launchable(client):
+    listing = client.get("/api/scenarios").json()["scenarios"]
+    assert {"flash-sale", "checkout-cascade"} <= {s["id"] for s in listing}
+    h = {"X-API-Key": "secret"}
+    assert client.post("/api/scenarios/nope/run", headers=h).status_code == 404
+    assert client.post("/api/scenarios/flash-sale/run").status_code == 401
+    ok = client.post("/api/scenarios/slow-burn/run", headers=h)
+    assert ok.status_code == 200 and ok.json()["status"] == "started"
+    for svc in ("inventory", "notification"):
+        client.post(f"/api/services/{svc}/heal", headers=h)

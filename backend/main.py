@@ -32,11 +32,12 @@ sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 sys.stderr.reconfigure(encoding="utf-8", errors="replace")
 
 import asyncio
-from fastapi import FastAPI, HTTPException, Depends
+from fastapi import FastAPI, HTTPException, Depends, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from services.service_manager import ServiceManager
 from shared.stream import hub
+from fault_injector.scenarios import SCENARIOS, list_scenarios, run_scenario, valid_steps
 from shared.config import MONITOR_POLL_INTERVAL
 from shared.security import require_api_key, rate_limit, get_api_key
 
@@ -173,6 +174,25 @@ def inject_fault(name: str, fault_type: str):
     if "error" in result:
         raise HTTPException(status_code=400, detail=result["error"])
     return result
+
+
+@app.get("/api/scenarios")
+def get_scenarios():
+    """Scripted multi-fault / cascade scenarios the dashboard can launch."""
+    return {"scenarios": list_scenarios()}
+
+
+@app.post("/api/scenarios/{scenario_id}/run",
+          dependencies=[Depends(require_api_key), Depends(rate_limit)])
+async def start_scenario(scenario_id: str, background: BackgroundTasks):
+    """Launch a scenario; delayed (cascade) steps continue in the background."""
+    if scenario_id not in SCENARIOS:
+        raise HTTPException(status_code=404, detail=f"Unknown scenario '{scenario_id}'")
+    steps = valid_steps(manager, scenario_id)
+    if not steps:
+        raise HTTPException(status_code=409, detail="No service in this scenario is available")
+    background.add_task(run_scenario, manager, scenario_id)
+    return {"scenario": scenario_id, "steps": len(steps), "status": "started"}
 
 
 @app.post("/api/services/{name}/heal",
