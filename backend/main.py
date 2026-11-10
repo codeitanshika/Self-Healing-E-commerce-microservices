@@ -32,9 +32,10 @@ sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 sys.stderr.reconfigure(encoding="utf-8", errors="replace")
 
 import asyncio
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from services.service_manager import ServiceManager
+from shared.security import require_api_key, rate_limit, get_api_key
 
 
 # ── Create the app ───────────────────────────────────────────────
@@ -58,7 +59,7 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=ALLOWED_ORIGINS,
     allow_methods=["*"],
-    allow_headers=["*"],
+    allow_headers=["*"],  # includes X-API-Key
 )
 
 # ── Create one shared ServiceManager ────────────────────────────
@@ -95,6 +96,8 @@ async def startup():
     """Runs once when FastAPI starts. Launches all background agents."""
     asyncio.create_task(monitor.run())
     print("✅ Monitor Agent started as background task")
+    if not get_api_key():
+        print("⚠️  API_KEY not set — fault-injection endpoints are open (fine for local demos)")
 # ────────────────────────────────────────────────────────────────
 # ROOT
 # ────────────────────────────────────────────────────────────────
@@ -152,7 +155,8 @@ def get_service_metrics(name: str):
 # FAULT INJECTION ROUTES
 # ────────────────────────────────────────────────────────────────
 
-@app.post("/api/services/{name}/fault/{fault_type}")
+@app.post("/api/services/{name}/fault/{fault_type}",
+          dependencies=[Depends(require_api_key), Depends(rate_limit)])
 def inject_fault(name: str, fault_type: str):
     """
     Break a service on purpose.
@@ -167,7 +171,8 @@ def inject_fault(name: str, fault_type: str):
     return result
 
 
-@app.post("/api/services/{name}/heal")
+@app.post("/api/services/{name}/heal",
+          dependencies=[Depends(require_api_key), Depends(rate_limit)])
 def heal_service(name: str, fix_type: str = "restart"):
     """
     Manually heal a service (reset to healthy).
