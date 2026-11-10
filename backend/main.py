@@ -37,6 +37,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from services.service_manager import ServiceManager
 from shared.stream import hub
+from shared.config import MONITOR_POLL_INTERVAL
 from shared.security import require_api_key, rate_limit, get_api_key
 
 
@@ -217,6 +218,7 @@ def get_unhealthy():
 
 from database.queries import (
     get_all_incidents, get_stats, get_mttr_by_fault_type, get_incident_detail,
+    get_revenue_series, get_breakdown,
 )
 
 
@@ -236,6 +238,24 @@ def get_dashboard_stats():
 def get_mttr_chart():
     """Average MTTR grouped by root cause, for the bar chart."""
     return {"data": get_mttr_by_fault_type()}
+
+
+@app.get("/api/revenue-series")
+def revenue_series():
+    """Cumulative revenue protected, one point per incident."""
+    return {"data": get_revenue_series()}
+
+
+@app.get("/api/breakdown")
+def breakdown():
+    """Incident counts and mean MTTR by service, fix and outcome."""
+    return get_breakdown()
+
+
+@app.get("/api/history")
+def metrics_history():
+    """Rolling per-service metric samples (response time, errors, memory, CPU)."""
+    return {"history": monitor.get_history(), "poll_interval": MONITOR_POLL_INTERVAL}
 
 
 @app.get("/api/incidents/{incident_id}")

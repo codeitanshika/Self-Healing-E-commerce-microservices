@@ -70,3 +70,18 @@ def test_rule_based_diagnosis_covers_all_faults():
     ]
     for metrics, cause in cases:
         assert rule_based_diagnose("x", metrics)["root_cause"] == cause
+
+
+def test_monitor_keeps_bounded_metric_history():
+    m = ServiceManager()
+    mon = MonitorAgent(m)
+
+    async def go():
+        for _ in range(MonitorAgent.HISTORY_SIZE + 5):
+            await mon._check_all_services()
+
+    asyncio.run(go())
+    hist = mon.get_history()
+    assert set(hist) == set(m.services)
+    assert len(hist["cart"]) == MonitorAgent.HISTORY_SIZE
+    assert {"t", "rt", "err", "mem", "cpu", "status"} <= set(hist["cart"][0])

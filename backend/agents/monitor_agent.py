@@ -17,6 +17,7 @@ Everything else in the system is triggered BY this agent.
 
 import asyncio
 import time
+from collections import defaultdict, deque
 from orchestrator.event_bus import bus
 from shared.events import ANOMALY_DETECTED
 from shared.config import THRESHOLDS, MONITOR_POLL_INTERVAL
@@ -28,6 +29,8 @@ class MonitorAgent:
     ANOMALY_DETECTED when something looks wrong.
     """
 
+    HISTORY_SIZE = 120   # samples kept per service (~10 min at a 5s poll)
+
     def __init__(self, service_manager):
         # needs the service manager to read health metrics
         self.service_manager = service_manager
@@ -35,6 +38,9 @@ class MonitorAgent:
         # tracks which services we have already reported
         # so we don't publish the same anomaly every 5 seconds
         self.active_anomalies: set[str] = set()
+
+        # rolling per-service metric samples, for dashboard sparklines
+        self.history: dict[str, deque] = defaultdict(lambda: deque(maxlen=self.HISTORY_SIZE))
 
         print("[MonitorAgent] initialized")
 
@@ -90,6 +96,7 @@ class MonitorAgent:
         pending_anomalies = []
 
         for name, health in all_health["services"].items():
+            self._record_sample(name, health)
             anomaly = self._detect_anomaly(health)
 
             if anomaly:
@@ -108,6 +115,19 @@ class MonitorAgent:
 
         if pending_anomalies:
             await asyncio.gather(*pending_anomalies)
+
+    def _record_sample(self, name: str, health: dict):
+        self.history[name].append({
+            "t":       round(time.time(), 1),
+            "rt":      health["response_time_ms"],
+            "err":     health["error_rate"],
+            "mem":     health["memory"],
+            "cpu":     health["cpu"],
+            "status":  health["status"],
+        })
+
+    def get_history(self) -> dict:
+        return {name: list(samples) for name, samples in self.history.items()}
 
     # ────────────────────────────────────────────────────────────
     # DETECT ANOMALY
