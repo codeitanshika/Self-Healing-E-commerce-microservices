@@ -4,7 +4,8 @@
 
 ![status](https://img.shields.io/badge/status-in%20development-yellow)
 ![python](https://img.shields.io/badge/python-3.11+-blue)
-![react](https://img.shields.io/badge/react-18-61dafb)
+![react](https://img.shields.io/badge/react-19-61dafb)
+![tests](https://github.com/codeitanshika/Self-Healing-E-commerce-microservices/actions/workflows/ci.yml/badge.svg)
 ![license](https://img.shields.io/badge/license-MIT-green)
 
 ---
@@ -54,7 +55,7 @@ detect → diagnose → fix → verify → retry if needed → log
 
 ```mermaid
 flowchart TB
-    UI["React Dashboard<br/>health tiles, incident log, MTTR chart"]
+    UI["React Dashboard<br/>live pipeline, event feed, charts"]
     SVC[("5 Simulated Services<br/>auth, cart, payment, inventory, notification")]
     MON["Monitor Agent"]
     ORCH["Orchestrator<br/>event bus + retry logic"]
@@ -64,7 +65,7 @@ flowchart TB
     REP["Report Agent"]
     DB[("SQLite")]
 
-    UI -->|"REST polling, 3-5s"| SVC
+    UI -->|"REST + SSE stream"| SVC
     MON -->|"polls every 5s"| SVC
     MON -->|"ANOMALY_DETECTED"| ORCH
     ORCH --> DIAG
@@ -106,16 +107,33 @@ The **Orchestrator** sequences these agents end-to-end and owns the retry loop (
 
 ---
 
+## Dashboard
+
+A dark operations console built for demonstrating the loop live:
+
+- **Hero KPI strip:** MTTR versus the manual baseline, recovery rate, *measured* diagnosis accuracy, first-try rate and revenue protected.
+- **Service cards:** live status, response-time sparklines, CPU/memory/error meters, and an "agents fixing…" state while an incident is open.
+- **Healing pipeline:** a stepper (Detect → Diagnose → Fix → Validate → Resolved) for every active incident, with root cause, confidence and a live timer. Several incidents can run concurrently.
+- **Event-bus feed:** every message the agents exchange, streamed over Server-Sent Events as it happens.
+- **Fault lab:** inject any fault, or launch a multi-fault / cascading scenario.
+- **Charts:** recovery time by root cause, cumulative revenue, MTTR per incident and incidents by service, each with an accessible table view.
+- **Incident drawer:** the full stage timeline plus the LLM's own reasoning for any past incident.
+
+---
+
 ## Tech stack
 
 | Layer | Technology | Why |
 |---|---|---|
-| Frontend | React 18 + Vite + Tailwind CSS | Fast, modern, portfolio-grade UI |
+| Frontend | React 19 + Vite, hand-written CSS design system | No UI-kit lock-in; fast |
 | Charts | Recharts | Clean, React-native charting |
-| Backend | Python 3.11 + FastAPI | Async, fast, industry standard |
-| AI / LLM | Groq API — open-weight models (`openai/gpt-oss-120b` default, validated against `gpt-oss-20b` and `qwen3.8-27b`) | Free, no credit card, not locked to one model |
-| Event bus | Custom async pub/sub | No external broker needed, fully understood, research-novel |
+| Live updates | Server-Sent Events (`/api/stream`) + polling fallback | Real-time without WebSocket infrastructure |
+| Backend | Python 3.11+ + FastAPI | Async, fast, industry standard |
+| AI / LLM | Groq API, open-weight models (`openai/gpt-oss-120b` default, validated against `gpt-oss-20b` and `qwen3.8-27b`) | Free, no credit card, not locked to one model |
+| Event bus | Custom async pub/sub with wildcard observers | No external broker needed, fully understood, research-novel |
 | Database | SQLite + SQLModel | Zero-setup, file-based |
+| Real service | Nginx in Docker (`docker-compose.yml`) | Evidence beyond pure simulation |
+| Tests / CI | pytest + GitHub Actions | Backend suite and frontend build on every push |
 | Deployment | Render (backend) + Vercel (frontend) | Both free tiers |
 
 > No paid services anywhere. Groq replaces the paid Anthropic API; a hand-built event bus replaces enterprise tools like Solace Agent Mesh.
@@ -125,72 +143,109 @@ The **Orchestrator** sequences these agents end-to-end and owns the retry loop (
 ## Repository structure
 
 ```
-self-healing-ecommerce/
+.
 ├── backend/
-│   ├── services/           # simulated service state + fault injection (service_manager.py)
+│   ├── services/            # simulated services + Docker-managed Nginx
 │   ├── agents/              # monitor, diagnosis, fix, validation, report + rule-based baseline
-│   ├── orchestrator/        # event bus + orchestrator + retry logic
-│   ├── shared/               # config, event topics, Groq LLM client
-│   ├── database/             # SQLite models + queries
-│   ├── experiments/           # automated multi-model benchmark runner + result CSVs
-│   ├── main.py                # FastAPI entry point
-│   ├── requirements.txt
-│   └── .env.example
-├── frontend/
-│   └── src/
-│       ├── components/        # HealthTiles, IncidentTable, MttrChart, StatsCards
-│       ├── usePolling.js       # polling hook
-│       └── App.jsx
-├── docs/
-│   └── results/                # model-comparison.md, retry-loop-test.md, archived runs
-└── README.md
+│   ├── orchestrator/        # event bus + orchestrator + retry/escalation + stage timeline
+│   ├── fault_injector/      # multi-fault and cascade scenarios
+│   ├── shared/              # config, event topics, LLM client, SSE hub, API-key/rate-limit
+│   ├── database/            # SQLite models + queries (stats, revenue series, breakdowns)
+│   ├── experiments/         # benchmark runner, end-to-end pipeline harness, stats, figures
+│   ├── tests/               # pytest suite
+│   └── main.py              # FastAPI entry point
+├── frontend/src/
+│   ├── components/          # KpiStrip, ServiceGrid, PipelineBoard, EventFeed, FaultLab, Charts, ...
+│   └── lib/                 # api client, polling + SSE hooks, formatters
+├── docs/results/            # findings, statistics.md, figures/
+└── .github/workflows/ci.yml
 ```
-
-Faults are triggered via `POST /api/services/{name}/fault/{fault_type}` — there's no separate CLI script; the dashboard's sidebar and the experiment runner both call this same route.
 
 ---
 
 ## Getting started
 
 ### Prerequisites
-- Python 3.11+
-- Node.js 18+
-- A free Groq API key from [console.groq.com](https://console.groq.com) — no card required
+- Python 3.11+ and Node.js 18+
+- A free Groq API key from [console.groq.com](https://console.groq.com) (no card required). Only the LLM mode needs it; `--mode rule` experiments and the whole test suite run without one.
+- Optional: Docker Desktop, for the real Nginx service.
 
-### Backend
+### 1. Backend
 ```bash
 cd backend
 python -m venv venv
 source venv/bin/activate        # Windows: venv\Scripts\activate
-pip install -r requirements.txt
-cp .env.example .env            # paste your GROQ_API_KEY into .env
+pip install -r requirements-dev.txt
+cp ../.env.example .env         # then paste your GROQ_API_KEY
 uvicorn main:app --reload --reload-exclude "*.db" --port 8000
 ```
 
-The `--reload-exclude "*.db"` matters: without it, `--reload` also watches `database/incidents.db`, which the Report Agent writes to on every incident. If a service is ever stuck unhealthy, that turns into a real restart loop — each write triggers a reload, which wipes the Monitor's "already reported this" state, so the same problem gets rediagnosed and re-logged immediately, triggering another reload.
+The `--reload-exclude "*.db"` matters: without it, `--reload` also watches `database/incidents.db`, which the Report Agent writes on every incident. If a service is ever stuck unhealthy, that becomes a real restart loop.
 
-### Frontend
+### 2. Frontend
 ```bash
 cd frontend
 npm install
-npm run dev
+echo "VITE_API_URL=http://localhost:8000" > .env.local
+npm run dev                     # http://localhost:5173
 ```
 
-Dashboard runs at `http://localhost:5173`.
-
-### Trigger a fault manually
+### 3. (Optional) the real container
 ```bash
-curl -X POST http://localhost:8000/api/services/payment/fault/crash
+docker compose up -d            # Nginx on :8080, registered as a sixth, real service
 ```
-`fault_type` is one of `crash | slow | memory | error`. Watch the backend terminal (or `GET /api/events`) to see the full loop fire: `ANOMALY_DETECTED → DIAGNOSIS_READY → FIX_APPLIED → VALIDATION_RESULT → INCIDENT_LOGGED`.
 
-### Run the experiment suite
-Benchmark diagnosis accuracy and MTTR headlessly, across models:
+### 4. Run the tests
+```bash
+cd backend && python -m pytest -q
+cd ../frontend && npm run lint && npm run build
+```
+
+### Configuration
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `GROQ_API_KEY` | none | LLM access for the Diagnosis Agent |
+| `GROQ_MODEL` | `openai/gpt-oss-120b` | Which Groq model diagnoses |
+| `ALLOWED_ORIGINS` | localhost:5173,3000 | CORS allow-list |
+| `MONITOR_POLL_INTERVAL` | `5` | Seconds between health sweeps |
+| `API_KEY` | empty (open) | If set, fault-injection, heal and scenario endpoints require `X-API-Key`. Set it on any public deployment, and `VITE_API_KEY` in the frontend. |
+| `RATE_LIMIT_MAX` / `RATE_LIMIT_WINDOW` | `20` / `60` | Per-IP limit on mutating endpoints |
+
+### API overview
+
+| Endpoint | Purpose |
+|---|---|
+| `GET /api/services`, `/api/history` | Live health and rolling metric samples |
+| `GET /api/stream` | Server-Sent Events: every pipeline event as it happens |
+| `GET /api/active-incidents`, `/api/incidents`, `/api/incidents/{id}` | Live and historical incidents, with stage timeline |
+| `GET /api/stats`, `/api/mttr-chart`, `/api/revenue-series`, `/api/breakdown` | Aggregates behind the dashboard |
+| `POST /api/services/{name}/fault/{type}` | Inject `crash \| slow \| memory \| error` *(auth + rate-limited)* |
+| `GET /api/scenarios`, `POST /api/scenarios/{id}/run` | Multi-fault and cascade scenarios *(run is auth + rate-limited)* |
+
+Watch the loop fire from a terminal:
+```bash
+curl -X POST http://localhost:8000/api/services/payment/fault/crash   # add -H "X-API-Key: ..." if API_KEY is set
+curl -N http://localhost:8000/api/stream
+```
+
+### Reproduce the research results
 ```bash
 cd backend
+# 1) Original benchmark: 20 scenarios x 3 trials per model (needs GROQ_API_KEY)
 python -m experiments.run_experiments openai/gpt-oss-120b
+
+# 2) End-to-end pipeline timing, including detection latency (no API key with --mode rule)
+python -m experiments.run_pipeline --service payment --fault all --trials 5 --mode rule
+python -m experiments.run_pipeline --scenario everything-breaks --trials 5 --mode rule
+
+# 3) Real Docker container evidence (Docker Desktop running + `docker compose up -d`)
+python -m experiments.run_pipeline --service nginx --fault crash --trials 10 --mode rule
+
+# 4) Statistics (CIs, McNemar, Kruskal-Wallis) and publication figures
+python -m experiments.analyze          # -> docs/results/statistics.md
+python -m experiments.make_figures     # -> docs/results/figures/*.png|pdf
 ```
-Runs 20 fault scenarios × 3 trials against the given Groq model and the rule-based baseline, writing per-trial and summary CSVs to `backend/experiments/`.
 
 ---
 
