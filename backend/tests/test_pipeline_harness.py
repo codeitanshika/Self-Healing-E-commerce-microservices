@@ -47,3 +47,16 @@ def test_concurrent_scenario_recovers_every_incident(monkeypatch):
         ServiceManager(), "flash-sale", trials=1, mode="rule", poll=0.2, timeout=30))
     assert {r["service"] for r in rows} == {"payment", "cart", "auth"}
     assert all(r["result"] == "RECOVERED" and r["concurrency"] == 3 for r in rows)
+
+
+def test_cascade_times_each_incident_from_its_own_injection(monkeypatch):
+    monkeypatch.setattr(validation_agent.ValidationAgent, "VALIDATION_DELAY_SECONDS", 0.2)
+    from fault_injector import scenarios
+    monkeypatch.setitem(scenarios.SCENARIOS, "t-cascade", {
+        "title": "t", "blurb": "", "kind": "cascade",
+        "steps": [("auth", "crash", 0), ("cart", "error", 2.5)]})
+    rows = asyncio.run(rp.run_scenario_experiment(
+        ServiceManager(), "t-cascade", trials=1, mode="rule", poll=0.2, timeout=30))
+    cart = next(r for r in rows if r["service"] == "cart")
+    # had it been timed from the first injection it would exceed the 2.5 s scripted delay
+    assert float(cart["mttr_s"]) < 2.5

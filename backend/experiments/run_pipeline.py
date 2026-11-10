@@ -194,8 +194,9 @@ async def run_scenario_experiment(manager, scenario_id: str, trials: int, mode: 
                     break
                 await asyncio.sleep(0.25)
             t0 = time.time()
-            await run_scenario(manager, scenario_id)
+            injections = await run_scenario(manager, scenario_id)
             inject_done = time.time()
+            injected_at = {i["service"]: i["injected_at"] for i in injections}
 
             deadline = inject_done + timeout
             while time.time() < deadline:
@@ -208,7 +209,8 @@ async def run_scenario_experiment(manager, scenario_id: str, trials: int, mode: 
                 await asyncio.sleep(0.2)
 
             for service, fault, delay in steps:
-                row = summarize_trial(recorder.since(t0, service), t0, fault)
+                t_own = injected_at.get(service, t0)
+                row = summarize_trial(recorder.since(t_own, service), t_own, fault)
                 row.update({"trial": trial, "service": service, "fault_type": fault, "mode": mode,
                             "scenario": scenario_id, "concurrency": len(steps)})
                 rows.append(row)

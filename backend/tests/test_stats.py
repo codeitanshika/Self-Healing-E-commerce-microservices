@@ -57,3 +57,19 @@ def test_analyze_end_to_end_and_markdown_wording():
     assert res["model_mttr_kruskal_p"] < 0.05
     md = analyze.render_markdown(res)
     assert "p = <" not in md and "Wilson" in md
+
+
+def test_pipeline_analysis_separates_cascades_from_concurrency():
+    from experiments import analyze_pipeline as ap
+
+    def row(scn, conc, mttr):
+        return {"scenario": scn, "concurrency": conc, "mttr_s": mttr, "result": "RECOVERED",
+                "fault_type": "crash", "retries": 0, "detect_s": 1.0, "diagnose_s": 0.0,
+                "fix_s": 0.0, "validate_s": 2.0}
+
+    rows = [row("", 1, 3.0), row("flash-sale", 3, 3.1), row("checkout-cascade", 3, 9.0)]
+    rows[0]["scenario"] = ""
+    res = ap.analyze(rows)
+    assert res["by_concurrency"] == {3: [3.1]}          # cascade excluded
+    assert "checkout-cascade" in res["by_scenario"]
+    assert "Simultaneous incidents" in ap.render(res)

@@ -1,0 +1,13 @@
+trial,service,fault_type,mode,detect_s,diagnose_s,fix_s,validate_s,mttr_s,result,retries,root_cause,diagnosis_correct
+1,auth,crash,rule,0.021,0.0,0.0,2.002,2.023,RECOVERED,0,service_crash,True
+1,auth,slow,rule,0.871,0.0,0.0,2.016,2.888,RECOVERED,0,cpu_overload,True
+1,auth,memory,rule,0.863,0.0,0.0,2.003,2.867,RECOVERED,0,memory_leak,True
+1,auth,error,rule,0.983,0.0,0.0,2.015,2.999,RECOVERED,0,error_spike,True
+2,auth,crash,rule,0.967,0.0,0.0,2.005,2.972,RECOVERED,0,service_crash,True
+2,auth,slow,rule,0.916,0.0,0.0,2.01,2.926,RECOVERED,0,cpu_overload,True
+2,auth,memory,rule,0.951,0.0,0.0,2.006,2.957,RECOVERED,0,memory_leak,True
+2,auth,error,rule,0.877,0.0,0.0,2.027,2.905,RECOVERED,0,error_spike,True
+3,auth,crash,rule,0.908,0.0,0.0,2.02,2.928,RECOVERED,0,service_crash,True
+3,auth,slow,rule,0.829,0.0,0.0,2.014,2.843,RECOVERED,0,cpu_overload,True
+3,auth,memory,rule,0.999,0.0,0.0,2.017,3.016,RECOVERED,0,memory_leak,True
+3,auth,error,rule,0.92,0.0,0.0,2.014,2.934,RECOVERED,0,error_spike,True

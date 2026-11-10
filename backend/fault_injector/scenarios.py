@@ -12,6 +12,7 @@ fault is injected first and the downstream symptoms follow after a delay,
 which is how an upstream outage typically shows up to the services behind it.
 """
 import asyncio
+import time
 
 SCENARIOS: dict[str, dict] = {
     "flash-sale": {
@@ -63,5 +64,8 @@ async def run_scenario(manager, scenario_id: str) -> list[dict]:
     for service, fault, delay in valid_steps(manager, scenario_id):
         if delay:
             await asyncio.sleep(delay)
-        results.append(await asyncio.to_thread(manager.inject_fault, service, fault))
+        result = await asyncio.to_thread(manager.inject_fault, service, fault)
+        # per-step injection time, so experiments can time each incident from
+        # ITS OWN fault (a cascade's later steps start seconds after the first)
+        results.append({**result, "service": service, "fault": fault, "injected_at": time.time()})
     return results

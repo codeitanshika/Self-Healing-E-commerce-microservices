@@ -1,0 +1,11 @@
+scenario,concurrency,trial,service,fault_type,mode,detect_s,diagnose_s,fix_s,validate_s,mttr_s,result,retries,root_cause,diagnosis_correct
+slow-burn,2,1,inventory,memory,rule,0.003,0.0,0.0,2.009,2.013,RECOVERED,0,memory_leak,True
+slow-burn,2,1,notification,crash,rule,0.003,0.0,0.0,2.009,2.013,RECOVERED,0,service_crash,True
+slow-burn,2,2,inventory,memory,rule,0.941,0.0,0.0,2.01,2.951,RECOVERED,0,memory_leak,True
+slow-burn,2,2,notification,crash,rule,0.941,0.0,0.0,2.01,2.951,RECOVERED,0,service_crash,True
+slow-burn,2,3,inventory,memory,rule,0.875,0.001,0.0,2.002,2.878,RECOVERED,0,memory_leak,True
+slow-burn,2,3,notification,crash,rule,0.876,0.0,0.0,2.002,2.878,RECOVERED,0,service_crash,True
+slow-burn,2,4,inventory,memory,rule,0.959,0.0,0.0,2.012,2.973,RECOVERED,0,memory_leak,True
+slow-burn,2,4,notification,crash,rule,0.959,0.0,0.0,2.013,2.973,RECOVERED,0,service_crash,True
+slow-burn,2,5,inventory,memory,rule,0.832,0.01,0.001,2.02,2.863,RECOVERED,0,memory_leak,True
+slow-burn,2,5,notification,crash,rule,0.833,0.01,0.001,2.02,2.863,RECOVERED,0,service_crash,True

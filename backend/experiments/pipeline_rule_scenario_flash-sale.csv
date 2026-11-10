@@ -1,0 +1,16 @@
+scenario,concurrency,trial,service,fault_type,mode,detect_s,diagnose_s,fix_s,validate_s,mttr_s,result,retries,root_cause,diagnosis_correct
+flash-sale,3,1,payment,crash,rule,0.003,0.001,0.0,2.009,2.013,RECOVERED,0,service_crash,True
+flash-sale,3,1,cart,slow,rule,0.003,0.0,0.0,2.008,2.012,RECOVERED,0,cpu_overload,True
+flash-sale,3,1,auth,error,rule,3.03,0.001,0.0,2.012,5.043,RECOVERED,0,error_spike,True
+flash-sale,3,2,payment,crash,rule,0.903,0.001,0.001,2.003,2.909,RECOVERED,0,service_crash,True
+flash-sale,3,2,cart,slow,rule,0.903,0.001,0.001,2.003,2.909,RECOVERED,0,cpu_overload,True
+flash-sale,3,2,auth,error,rule,0.903,0.001,0.001,2.003,2.909,RECOVERED,0,error_spike,True
+flash-sale,3,3,payment,crash,rule,0.755,0.001,0.001,2.006,2.763,RECOVERED,0,service_crash,True
+flash-sale,3,3,cart,slow,rule,0.755,0.001,0.001,2.006,2.762,RECOVERED,0,cpu_overload,True
+flash-sale,3,3,auth,error,rule,0.755,0.001,0.001,2.006,2.762,RECOVERED,0,error_spike,True
+flash-sale,3,4,payment,crash,rule,0.861,0.001,0.0,2.011,2.873,RECOVERED,0,service_crash,True
+flash-sale,3,4,cart,slow,rule,0.861,0.001,0.0,2.011,2.873,RECOVERED,0,cpu_overload,True
+flash-sale,3,4,auth,error,rule,0.861,0.001,0.0,2.01,2.873,RECOVERED,0,error_spike,True
+flash-sale,3,5,payment,crash,rule,0.897,0.001,0.001,2.009,2.908,RECOVERED,0,service_crash,True
+flash-sale,3,5,cart,slow,rule,0.897,0.001,0.001,2.009,2.907,RECOVERED,0,cpu_overload,True
+flash-sale,3,5,auth,error,rule,0.896,0.001,0.001,2.009,2.907,RECOVERED,0,error_spike,True
