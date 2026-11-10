@@ -68,6 +68,30 @@ REVENUE_PER_SECOND = {
     "notification": 1.0,    # ₹1/s — emails fail but orders still go through
 }
 
+# ── Fix effectiveness (strict healing mode) ──────────────────────
+# By default SimulatedService.heal() cures ANY fault with ANY fix, which makes
+# recovery rate tautological (see paper Section 6.1). With STRICT_HEALING=1 a
+# fix only cures the faults listed here; an ineffective fix leaves the service
+# broken, so the Validation Agent reports STILL_BROKEN and the Orchestrator's
+# retry/escalation loop is exercised by genuinely wrong diagnoses.
+#
+#   crash  : only a restart revives a dead process
+#   memory : clearing memory, or restarting, frees the leak
+#   slow   : shedding or re-routing load; a restart just re-meets the same load
+#   error  : backoff/retry smooths a transient spike; a restart also clears it
+EFFECTIVE_FIXES = {
+    "crash":  {"restart"},
+    "memory": {"clear_memory", "restart"},
+    "slow":   {"reduce_load", "reroute_traffic"},
+    "error":  {"retry_with_backoff", "restart"},
+}
+
+
+def strict_healing() -> bool:
+    """Read at call time so tests and experiments can toggle it."""
+    return os.getenv("STRICT_HEALING", "0") == "1"
+
+
 # ── Orchestrator settings ────────────────────────────────────────
 MAX_RETRIES = 2             # how many times to retry a failed fix
 MANUAL_BASELINE_SECONDS = 900   # 15 minutes — assumed manual MTTR for comparison

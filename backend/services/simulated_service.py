@@ -17,6 +17,8 @@ import random
 import time
 from datetime import datetime
 
+from shared.config import EFFECTIVE_FIXES, strict_healing
+
 
 class SimulatedService:
     """
@@ -146,6 +148,21 @@ class SimulatedService:
         old_status = self.status
         old_fault = self.active_fault
 
+        # Strict mode: a fix that does not address the active fault leaves
+        # the service exactly as broken as it was (see shared/config.py).
+        if old_fault and strict_healing() and fix_type not in EFFECTIVE_FIXES.get(old_fault, set()):
+            return {
+                "service":        self.name,
+                "fix_applied":    fix_type,
+                "old_status":     old_status,
+                "old_fault":      old_fault,
+                "new_status":     self.status,
+                "effective":      False,
+                "heal_count":     self.heal_count,
+                "message":        f"{fix_type} had no effect on {self.name}'s {old_fault} fault",
+                "timestamp":      time.time(),
+            }
+
         # Reset all metrics to healthy values
         self.status = "ok"
         self.response_time_ms = random.randint(30, 80)
@@ -162,6 +179,7 @@ class SimulatedService:
             "old_status":     old_status,
             "old_fault":      old_fault,
             "new_status":     "ok",
+            "effective":      True,
             "heal_count":     self.heal_count,
             "message":        f"{self.name} healed via {fix_type}",
             "timestamp":      time.time(),
