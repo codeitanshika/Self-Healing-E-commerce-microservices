@@ -34,7 +34,9 @@ sys.stderr.reconfigure(encoding="utf-8", errors="replace")
 import asyncio
 from fastapi import FastAPI, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
 from services.service_manager import ServiceManager
+from shared.stream import hub
 from shared.security import require_api_key, rate_limit, get_api_key
 
 
@@ -94,6 +96,7 @@ report_agent = ReportAgent(orchestrator.incident_cache)
 @app.on_event("startup")
 async def startup():
     """Runs once when FastAPI starts. Launches all background agents."""
+    hub.attach()
     asyncio.create_task(monitor.run())
     print("✅ Monitor Agent started as background task")
     if not get_api_key():
@@ -255,3 +258,18 @@ def get_recent_events(limit: int = 20):
         "events": bus.get_recent_events(limit),
         "subscribers": bus.get_subscriber_count(),
     }
+
+
+@app.get("/api/stream")
+async def stream_events():
+    """
+    Server-Sent Events: every pipeline event (ANOMALY_DETECTED,
+    DIAGNOSIS_READY, FIX_APPLIED, ...) is pushed to the browser the
+    instant it is published on the bus. Replays the last few events on
+    connect so a freshly opened dashboard is never empty.
+    """
+    return StreamingResponse(
+        hub.listen(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )

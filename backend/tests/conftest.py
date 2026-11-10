@@ -12,8 +12,9 @@ from orchestrator.event_bus import bus
 @pytest.fixture(autouse=True)
 def clean_bus():
     """The bus is a process-wide singleton; isolate every test."""
-    bus._subscribers.clear()
-    bus._event_log.clear()
-    yield
-    bus._subscribers.clear()
-    bus._event_log.clear()
+    for _ in range(2):
+        bus._subscribers.clear()
+        bus._wildcard.clear()
+        bus._event_log.clear()
+        if _ == 0:
+            yield
