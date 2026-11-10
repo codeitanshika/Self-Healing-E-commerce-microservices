@@ -109,3 +109,36 @@ def test_unknown_incident_ids_are_ignored():
         "business_impact": "", "explanation": "", "fix": "restart",
     }))
     assert sent[FIX_REQUEST] == []
+
+
+def test_timeline_and_stage_follow_the_pipeline():
+    orch, sent = make()
+
+    async def go():
+        iid = await start_incident(orch, sent)
+        cached = orch.incident_cache[iid]
+        assert cached["stage"] == "fixing"
+        await bus.publish(FIX_APPLIED, {"incident_id": iid, "service": "payment", "fix_applied": "restart"})
+        assert cached["stage"] == "validating"
+        await bus.publish(VALIDATION_RESULT, {"incident_id": iid, "service": "payment",
+                                              "result": "STILL_BROKEN"})
+        assert cached["stage"] == "fixing"
+        await bus.publish(VALIDATION_RESULT, {"incident_id": iid, "service": "payment",
+                                              "result": "RECOVERED", "mttr_seconds": 4})
+        return cached
+
+    cached = asyncio.run(go())
+    assert [e["stage"] for e in cached["timeline"]] == [
+        "DETECTED", "DIAGNOSED", "FIX_APPLIED", "RETRY", "RECOVERED"]
+    assert cached["stage"] == "recovered"
+
+
+def test_multiple_active_incidents_are_listed():
+    orch, sent = make()
+
+    async def go():
+        await bus.publish(ANOMALY_DETECTED, {"service": "a", "fault_type": "crash", "metrics": {}})
+        await bus.publish(ANOMALY_DETECTED, {"service": "b", "fault_type": "slow", "metrics": {}})
+
+    asyncio.run(go())
+    assert {i["service"] for i in orch.get_active_incidents()} == {"a", "b"}

@@ -19,7 +19,7 @@ from sqlmodel import Session
 from orchestrator.event_bus import bus
 from shared.events import VALIDATION_RESULT, INCIDENT_LOGGED
 from shared.config import MANUAL_BASELINE_SECONDS, REVENUE_PER_SECOND
-from database.models import Incident, engine
+from database.models import Incident, IncidentStage, engine
 
 
 class ReportAgent:
@@ -79,6 +79,8 @@ class ReportAgent:
             mttr_seconds=mttr,
         )
 
+        self.log_timeline(incident_id_saved, details.get("timeline", []))
+
         print(f"[ReportAgent] logged incident #{incident_id_saved} for {service} → {result}")
 
         await bus.publish(INCIDENT_LOGGED, {
@@ -123,6 +125,20 @@ class ReportAgent:
             session.commit()
             session.refresh(incident)
             return incident.id
+
+    def log_timeline(self, incident_db_id: int, timeline: list[dict]):
+        """Persist the stage-by-stage timeline gathered by the Orchestrator."""
+        if not timeline:
+            return
+        with Session(engine) as session:
+            for entry in timeline:
+                session.add(IncidentStage(
+                    incident_db_id=incident_db_id,
+                    stage=entry["stage"],
+                    ts=entry["ts"],
+                    detail=entry.get("detail", ""),
+                ))
+            session.commit()
 
     def _calculate_revenue_protected(self, service: str, mttr: float, result: str) -> float:
         """

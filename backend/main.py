@@ -215,7 +215,9 @@ def get_unhealthy():
 # DASHBOARD DATA ROUTES (Phase 5)
 # ────────────────────────────────────────────────────────────────
 
-from database.queries import get_all_incidents, get_stats, get_mttr_by_fault_type
+from database.queries import (
+    get_all_incidents, get_stats, get_mttr_by_fault_type, get_incident_detail,
+)
 
 
 @app.get("/api/incidents")
@@ -234,6 +236,21 @@ def get_dashboard_stats():
 def get_mttr_chart():
     """Average MTTR grouped by root cause, for the bar chart."""
     return {"data": get_mttr_by_fault_type()}
+
+
+@app.get("/api/incidents/{incident_id}")
+def get_incident(incident_id: int):
+    """One incident plus its stage-by-stage timeline."""
+    detail = get_incident_detail(incident_id)
+    if detail is None:
+        raise HTTPException(status_code=404, detail="Incident not found")
+    return detail
+
+
+@app.get("/api/active-incidents")
+def get_active_incidents():
+    """Every in-progress incident with its live stage and timeline."""
+    return {"incidents": orchestrator.get_active_incidents()}
 
 
 @app.get("/api/active-incident")

@@ -61,7 +61,10 @@ class Orchestrator:
             "detected_at":  time.time(),
             "retry_count":  0,
             "status":       "IN_PROGRESS",
+            "stage":        "diagnosing",
+            "timeline":     [],
         }
+        self._record(incident_id, "DETECTED", f"{fault_type} anomaly on {service}")
 
         print(f"[Orchestrator] new incident {incident_id}: {service} ({fault_type})")
 
@@ -89,7 +92,12 @@ class Orchestrator:
             "business_impact": payload["business_impact"],
             "explanation":     payload["explanation"],
             "fix_applied":     payload["fix"],   # the fix we're ABOUT to try
+            "stage":           "fixing",
         })
+        self._record(
+            incident_id, "DIAGNOSED",
+            f"{payload['root_cause']} ({payload['confidence']}% confidence) -> {payload['fix']}",
+        )
 
         service = self.incident_cache[incident_id]["service"]
 
@@ -112,6 +120,8 @@ class Orchestrator:
 
         service = self.incident_cache[incident_id]["service"]
         detected_at = self.incident_cache[incident_id]["detected_at"]
+        self.incident_cache[incident_id]["stage"] = "validating"
+        self._record(incident_id, "FIX_APPLIED", payload.get("fix_applied", ""))
 
         await bus.publish(VALIDATE_REQUEST, {
             "service":     service,
@@ -146,6 +156,8 @@ class Orchestrator:
             # ReportAgent is also subscribed to VALIDATION_RESULT directly,
             # so it will independently log this. We just clean up here.
             cached["status"] = "RECOVERED"
+            cached["stage"] = "recovered"
+            self._record(incident_id, "RECOVERED", f"MTTR {payload.get('mttr_seconds', 0)}s")
             self._cleanup(incident_id)
             return
 
@@ -156,6 +168,8 @@ class Orchestrator:
             # out of retries — escalate
             print(f"[Orchestrator] 🆘 incident {incident_id} ESCALATED after {retry_count} retries")
             cached["status"] = "ESCALATED"
+            cached["stage"] = "escalated"
+            self._record(incident_id, "ESCALATED", f"gave up after {retry_count} retries")
             # Republish a final VALIDATION_RESULT with ESCALATED so
             # ReportAgent logs it correctly (it only knows RECOVERED/STILL_BROKEN
             # from ValidationAgent, so Orchestrator overrides the final state)
@@ -172,6 +186,8 @@ class Orchestrator:
 
         cached["retry_count"] += 1
         cached["fix_applied"] = next_fix
+        cached["stage"] = "fixing"
+        self._record(incident_id, "RETRY", f"#{cached['retry_count']} -> {next_fix}")
 
         print(f"[Orchestrator] 🔄 incident {incident_id} STILL_BROKEN — "
               f"retry #{cached['retry_count']} with fix '{next_fix}'")
@@ -185,6 +201,22 @@ class Orchestrator:
     # ────────────────────────────────────────────────────────────
     # HELPERS
     # ────────────────────────────────────────────────────────────
+
+    def _record(self, incident_id: str, stage: str, detail: str = ""):
+        """Append a timestamped entry to the incident's timeline."""
+        self.incident_cache[incident_id]["timeline"].append({
+            "stage":  stage,
+            "ts":     time.time(),
+            "detail": detail,
+        })
+
+    def get_active_incidents(self) -> list[dict]:
+        """All incidents still being handled (several can run concurrently)."""
+        return [
+            {"incident_id": iid, **inc}
+            for iid, inc in self.incident_cache.items()
+            if inc.get("status") == "IN_PROGRESS"
+        ]
 
     def _cleanup(self, incident_id: str):
         """

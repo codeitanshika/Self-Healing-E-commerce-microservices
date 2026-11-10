@@ -9,7 +9,7 @@ This file only READS. The dashboard uses these via REST endpoints.
 """
 
 from sqlmodel import Session, select
-from database.models import Incident, engine
+from database.models import Incident, IncidentStage, engine
 from shared.config import MANUAL_BASELINE_SECONDS
 
 
@@ -23,23 +23,24 @@ def get_all_incidents(limit: int = 50) -> list[dict]:
             select(Incident).order_by(Incident.timestamp.desc()).limit(limit)
         ).all()
 
-        return [
-            {
-                "id":                inc.id,
-                "service":           inc.service,
-                "fault_type":        inc.fault_type,
-                "root_cause":        inc.root_cause,
-                "confidence":        inc.confidence,
-                "fix_applied":       inc.fix_applied,
-                "retry_count":       inc.retry_count,
-                "result":            inc.result,
-                "mttr_seconds":      inc.mttr_seconds,
-                "revenue_protected": inc.revenue_protected,
-                "business_impact":   inc.business_impact,
-                "timestamp":         inc.timestamp,
-            }
-            for inc in incidents
-        ]
+        return [_incident_row(inc) for inc in incidents]
+
+
+def _incident_row(inc: Incident) -> dict:
+    return {
+        "id":                inc.id,
+        "service":           inc.service,
+        "fault_type":        inc.fault_type,
+        "root_cause":        inc.root_cause,
+        "confidence":        inc.confidence,
+        "fix_applied":       inc.fix_applied,
+        "retry_count":       inc.retry_count,
+        "result":            inc.result,
+        "mttr_seconds":      inc.mttr_seconds,
+        "revenue_protected": inc.revenue_protected,
+        "business_impact":   inc.business_impact,
+        "timestamp":         inc.timestamp,
+    }
 
 
 def get_stats() -> dict:
@@ -107,3 +108,23 @@ def get_mttr_by_fault_type() -> list[dict]:
         }
         for cause, times in grouped.items()
     ]
+
+
+def get_incident_detail(incident_id: int) -> dict | None:
+    """One incident with its full stage timeline, for the detail drawer."""
+    with Session(engine) as session:
+        inc = session.get(Incident, incident_id)
+        if inc is None:
+            return None
+        stages = session.exec(
+            select(IncidentStage)
+            .where(IncidentStage.incident_db_id == incident_id)
+            .order_by(IncidentStage.ts)
+        ).all()
+
+    row = _incident_row(inc)
+    row["explanation"] = inc.explanation
+    row["timeline"] = [
+        {"stage": s.stage, "ts": s.ts, "detail": s.detail} for s in stages
+    ]
+    return row
