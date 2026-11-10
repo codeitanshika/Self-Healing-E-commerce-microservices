@@ -1,22 +1,7 @@
 import { useState } from "react";
-import { injectFault } from "../lib/api";
+import { injectFault, post } from "../lib/api";
+import { usePolling } from "../lib/hooks";
 import { FAULT_INFO } from "../lib/format";
-
-// Multi-fault scenarios: several incidents running concurrently.
-const SCENARIOS = [
-  {
-    id: "flash-sale",
-    title: "Flash-sale surge",
-    blurb: "Payment crashes while cart slows and auth throws errors",
-    steps: [["payment", "crash"], ["cart", "slow"], ["auth", "error"]],
-  },
-  {
-    id: "leak-and-crash",
-    title: "Slow burn",
-    blurb: "Inventory leaks memory as notification dies",
-    steps: [["inventory", "memory"], ["notification", "crash"]],
-  },
-];
 
 export function FaultLab({ services }) {
   const names = Object.keys(services?.services ?? {});
@@ -24,6 +9,8 @@ export function FaultLab({ services }) {
   const [fault, setFault] = useState("crash");
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState(null);
+  const { data: scenarioData } = usePolling("/api/scenarios", 60000);
+  const scenarios = scenarioData?.scenarios ?? [];
 
   // The real Nginx container only has an honest equivalent for "crash".
   const faults = service === "nginx" ? ["crash"] : Object.keys(FAULT_INFO);
@@ -32,11 +19,11 @@ export function FaultLab({ services }) {
     if (n === "nginx") setFault("crash");
   };
 
-  const run = async (pairs, label) => {
+  const run = async (action, label) => {
     setBusy(true);
     setNote(null);
     try {
-      await Promise.all(pairs.map(([s, f]) => injectFault(s, f)));
+      await action();
       setNote({ ok: true, text: `${label} injected. Watch the pipeline →` });
     } catch (err) {
       setNote({ ok: false, text: err.message });
@@ -77,20 +64,24 @@ export function FaultLab({ services }) {
 
       <div style={{ marginTop: 14 }}>
         <button className="btn danger full" disabled={busy}
-          onClick={() => run([[service, fault]], `${fault} on ${service}`)}>
+          onClick={() => run(() => injectFault(service, fault), `${fault} on ${service}`)}>
           {busy ? "Injecting…" : `Inject ${fault} into ${service}`}
         </button>
       </div>
 
       <span className="label">Multi-fault scenarios</span>
       <div style={{ display: "grid", gap: 8 }}>
-        {SCENARIOS.map((s) => (
+        {scenarios.map((s) => (
           <div className="scenario" key={s.id}>
-            <div><b>{s.title}</b><span>{s.blurb}</span></div>
+            <div>
+              <b>{s.title} <span className="svc-tag" style={{ display: "inline" }}>{s.kind}</span></b>
+              <span>{s.blurb}</span>
+            </div>
             <button className="btn ghost" disabled={busy}
-              onClick={() => run(s.steps, s.title)}>Run</button>
+              onClick={() => run(() => post(`/api/scenarios/${s.id}/run`), s.title)}>Run</button>
           </div>
         ))}
+        {scenarios.length === 0 && <span className="section-sub">Loading scenarios…</span>}
       </div>
 
       {note && <div className={`notice ${note.ok ? "ok" : "err"}`} role="status">{note.text}</div>}
