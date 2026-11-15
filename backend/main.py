@@ -37,6 +37,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from services.service_manager import ServiceManager
 from shared.stream import hub
+from database import admin as db_admin
 from fault_injector.scenarios import SCENARIOS, list_scenarios, run_scenario, valid_steps
 from shared.config import MONITOR_POLL_INTERVAL
 from shared.security import require_api_key, rate_limit, get_api_key
@@ -174,6 +175,28 @@ def inject_fault(name: str, fault_type: str):
     if "error" in result:
         raise HTTPException(status_code=400, detail=result["error"])
     return result
+
+
+@app.post("/api/admin/reset",
+          dependencies=[Depends(require_api_key), Depends(rate_limit)])
+def reset_demo_data(confirm: bool = False):
+    """
+    Wipe incident history and return every service to healthy, so a demo
+    starts from a clean slate. Destructive, so it must be called with
+    ?confirm=true (the dashboard asks the user first).
+    """
+    if not confirm:
+        raise HTTPException(status_code=400, detail="Pass ?confirm=true to reset all data")
+    removed = db_admin.reset_all()
+    orchestrator.incident_cache.clear()
+    monitor.active_anomalies.clear()
+    monitor.history.clear()
+    healed = []
+    for name in list(manager.services):
+        if not manager.is_service_healthy(name):
+            manager.heal_service(name, "restart")
+            healed.append(name)
+    return {**removed, "services_healed": healed, "status": "reset"}
 
 
 @app.get("/api/scenarios")
