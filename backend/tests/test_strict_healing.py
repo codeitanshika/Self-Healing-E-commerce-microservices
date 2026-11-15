@@ -38,3 +38,13 @@ def test_every_correct_primary_fix_is_effective():
     expected = {"crash": "service_crash", "memory": "memory_leak", "slow": "cpu_overload", "error": "error_spike"}
     for fault in FAULT_TYPES:
         assert FIX_MAP[expected[fault]]["primary"] in EFFECTIVE_FIXES[fault], fault
+
+
+def test_noise_harness_resets_a_service_left_broken_by_escalation(strict):
+    from experiments.run_noise import reset_service
+    m = ServiceManager()
+    m.inject_fault("cart", "slow")
+    m.heal_service("cart", "restart")            # ineffective for slow in strict mode
+    assert not m.is_service_healthy("cart")
+    reset_service(m, "cart")
+    assert m.is_service_healthy("cart")

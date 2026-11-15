@@ -136,7 +136,10 @@ class ServiceManager:
             return {"error": f"Service '{name}' not found"}
 
         result = self.services[name].heal(fix_type)
-        print(f"✅ HEALED: {name} via {fix_type}")
+        if result.get("effective") is False:
+            print(f"⚠️  NO EFFECT: {name} via {fix_type} (fault still active)")
+        else:
+            print(f"✅ HEALED: {name} via {fix_type}")
         return result
 
     # ────────────────────────────────────────────────────────────
