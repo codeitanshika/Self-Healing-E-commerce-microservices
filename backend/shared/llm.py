@@ -19,7 +19,16 @@ from groq import Groq
 load_dotenv()
 
 client = Groq(api_key=os.getenv("GROQ_API_KEY"))
-MODEL = os.getenv("GROQ_MODEL", "openai/gpt-oss-120b")
+DEFAULT_MODEL = "openai/gpt-oss-120b"
+
+
+def current_model() -> str:
+    """
+    Resolved on EVERY call, not at import. The experiment runners select the
+    model by setting GROQ_MODEL after the modules are imported; reading it
+    once at import time would silently ignore that and always use the default.
+    """
+    return os.getenv("GROQ_MODEL", DEFAULT_MODEL)
 
 
 async def ask_llm(prompt: str) -> dict:
@@ -41,7 +50,7 @@ async def ask_llm(prompt: str) -> dict:
     try:
         response = await asyncio.to_thread(
             client.chat.completions.create,
-            model=MODEL,
+            model=current_model(),
             messages=[{"role": "user", "content": prompt}],
             max_tokens=400,
             temperature=0.2,   # low temperature = more consistent, less "creative"
