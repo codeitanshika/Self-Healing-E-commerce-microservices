@@ -54,7 +54,11 @@ FIX_MAP = {
     "cpu_overload":   {"primary": "reduce_load",        "retry": "restart"},
     "high_latency":   {"primary": "reroute_traffic",    "retry": "reduce_load"},
     "error_spike":    {"primary": "retry_with_backoff", "retry": "restart"},
-    "unknown":        {"primary": "restart",            "retry": "restart"},
+    # When the diagnosis itself failed we know nothing, so the two attempts
+    # must be DIFFERENT fixes covering the likely classes: restart (crash,
+    # memory, error) then reduce_load (slow). With restart->restart a failed
+    # diagnosis could never recover from an overload (first strategy run).
+    "unknown":        {"primary": "restart",            "retry": "reduce_load"},
 }
 
 # ── Revenue per second (illustrative, for dashboard metric) ─────

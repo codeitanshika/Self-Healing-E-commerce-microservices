@@ -31,44 +31,60 @@ def current_model() -> str:
     return os.getenv("GROQ_MODEL", DEFAULT_MODEL)
 
 
+# Reasoning models (e.g. gpt-oss) spend part of the token budget "thinking"
+# before they emit the JSON answer. The original limit of 400 truncated a
+# measurable share of answers mid-object (see docs/results/strategy-comparison.md,
+# first run), which silently degraded to the safe default.
+MAX_TOKENS = 1500
+MAX_ATTEMPTS = 2   # one retry on an unusable answer before falling back
+
+
+def parse_json_object(raw_text: str) -> dict:
+    """
+    Pull the first complete JSON object out of an LLM reply. Tolerates
+    markdown fences and prose around the object. Raises ValueError if no
+    valid object is found (including a truncated one).
+    """
+    cleaned = (raw_text or "").replace("```json", "").replace("```", "").strip()
+    start, end = cleaned.find("{"), cleaned.rfind("}")
+    if start == -1 or end <= start:
+        raise ValueError("no JSON object in reply")
+    obj = json.loads(cleaned[start:end + 1])
+    if not isinstance(obj, dict):
+        raise ValueError("reply JSON is not an object")
+    return obj
+
+
 async def ask_llm(prompt: str) -> dict:
     """
     Sends a prompt to Groq and returns a parsed JSON dict.
 
     IMPORTANT: this function ALWAYS returns a dict.
-    If the LLM call fails, or returns text that isn't valid JSON,
+    If the LLM call fails, or keeps returning unusable text after one retry,
     we return a safe default instead of crashing the whole agent.
     This matches the rule in code-standards.md.
 
     The Groq client is synchronous (blocking network I/O). Run it in
     a worker thread via asyncio.to_thread so a slow/rate-limited call
-    for one incident doesn't freeze the whole event loop — otherwise
-    every other agent, every other in-flight incident, and the
-    FastAPI routes the dashboard polls all stall until this one
-    call returns.
+    for one incident doesn't freeze the whole event loop.
     """
-    try:
-        response = await asyncio.to_thread(
-            client.chat.completions.create,
-            model=current_model(),
-            messages=[{"role": "user", "content": prompt}],
-            max_tokens=400,
-            temperature=0.2,   # low temperature = more consistent, less "creative"
-        )
-        raw_text = response.choices[0].message.content
-
-        # LLMs sometimes wrap JSON in ```json ... ``` — strip that if present
-        cleaned = raw_text.replace("```json", "").replace("```", "").strip()
-
-        return json.loads(cleaned)
-
-    except json.JSONDecodeError:
-        print(f"[llm.py] ⚠️  LLM returned invalid JSON: {raw_text[:200]}")
-        return _safe_default()
-
-    except Exception as e:
-        print(f"[llm.py] ⚠️  LLM call failed: {e}")
-        return _safe_default()
+    for attempt in range(1, MAX_ATTEMPTS + 1):
+        raw_text = ""
+        try:
+            response = await asyncio.to_thread(
+                client.chat.completions.create,
+                model=current_model(),
+                messages=[{"role": "user", "content": prompt}],
+                max_tokens=MAX_TOKENS,
+                temperature=0.2,   # low temperature = more consistent, less "creative"
+            )
+            raw_text = response.choices[0].message.content or ""
+            return parse_json_object(raw_text)
+        except (ValueError, json.JSONDecodeError):
+            print(f"[llm.py] ⚠️  unusable LLM reply (attempt {attempt}/{MAX_ATTEMPTS}): {raw_text[:120]!r}")
+        except Exception as e:
+            print(f"[llm.py] ⚠️  LLM call failed (attempt {attempt}/{MAX_ATTEMPTS}): {e}")
+    return _safe_default()
 
 
 def _safe_default() -> dict:
