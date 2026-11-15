@@ -84,6 +84,16 @@ export function FaultLab({ services }) {
         {scenarios.length === 0 && <span className="section-sub">Loading scenarios…</span>}
       </div>
 
+      <span className="label">Demo data</span>
+      <button className="btn ghost full" disabled={busy}
+        onClick={() => {
+          if (window.confirm("Delete all incident history and reset every service to healthy? This cannot be undone.")) {
+            run(() => post("/api/admin/reset?confirm=true"), "Reset").then(() => setNote({ ok: true, text: "Demo data cleared. Fresh start." }));
+          }
+        }}>
+        Reset demo data
+      </button>
+
       {note && <div className={`notice ${note.ok ? "ok" : "err"}`} role="status">{note.text}</div>}
     </section>
   );
