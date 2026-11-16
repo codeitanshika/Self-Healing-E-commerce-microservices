@@ -1,6 +1,6 @@
 # Strategy comparison under strict healing
 
-Every fault below is one of the 20 (service, fault) scenarios, repeated 3 times per diagnoser, with `STRICT_HEALING=1` (a fix only cures a fault it is effective against). Recovery is reported for:
+Every fault below is one of the 20 (service, fault) scenarios, repeated per diagnoser (trials per diagnoser are in the table: n/20), with `STRICT_HEALING=1` (a fix only cures a fault it is effective against). Recovery is reported for:
 
 - **Blind restart**: always restart, no diagnosis, no verification (a Kubernetes liveness-probe analogue; analytic).
 - **Open loop**: apply the diagnoser's first fix once and trust it (paired with the closed loop's diagnosis).
@@ -11,26 +11,26 @@ Cells: recovery rate (successes/n) with a 95% Wilson interval.
 | Diagnoser | Diagnosis accuracy | Blind restart | Open loop | Closed loop | Needed a retry | Escalated | Closed vs open (McNemar) |
 |---|---|---|---|---|---|---|---|
 | rule-based | 100.0% (60/60) [94.0%, 100.0%] | 75.0% (45/60) [62.8%, 84.2%] | 100.0% (60/60) [94.0%, 100.0%] | 100.0% (60/60) [94.0%, 100.0%] | 0 | 0 | p = 1.000 (0 open-only, 0 closed-only) |
-| gpt-oss-120b | 100.0% (60/60) [94.0%, 100.0%] | 75.0% (45/60) [62.8%, 84.2%] | 91.7% (55/60) [81.9%, 96.4%] | 100.0% (60/60) [94.0%, 100.0%] | 5 | 0 | p = 0.062 (0 open-only, 5 closed-only) |
-| gpt-oss-20b | 100.0% (60/60) [94.0%, 100.0%] | 75.0% (45/60) [62.8%, 84.2%] | 100.0% (60/60) [94.0%, 100.0%] | 100.0% (60/60) [94.0%, 100.0%] | 0 | 0 | p = 1.000 (0 open-only, 0 closed-only) |
-| qwen3-27b | 100.0% (60/60) [94.0%, 100.0%] | 75.0% (45/60) [62.8%, 84.2%] | 100.0% (60/60) [94.0%, 100.0%] | 100.0% (60/60) [94.0%, 100.0%] | 0 | 0 | p = 1.000 (0 open-only, 0 closed-only) |
+| gpt-oss-120b | 100.0% (200/200) [98.1%, 100.0%] | 75.0% (150/200) [68.6%, 80.5%] | 86.0% (172/200) [80.5%, 90.1%] | 100.0% (200/200) [98.1%, 100.0%] | 28 | 0 | p < 0.001 (0 open-only, 28 closed-only) |
+| gpt-oss-20b | 99.5% (199/200) [97.2%, 99.9%] | 75.0% (150/200) [68.6%, 80.5%] | 99.0% (198/200) [96.4%, 99.7%] | 99.5% (199/200) [97.2%, 99.9%] | 1 | 0 | p = 1.000 (0 open-only, 1 closed-only) |
+| qwen3-27b | 99.5% (199/200) [97.2%, 99.9%] | 75.0% (150/200) [68.6%, 80.5%] | 100.0% (200/200) [98.1%, 100.0%] | 100.0% (200/200) [98.1%, 100.0%] | 0 | 0 | p = 1.000 (0 open-only, 0 closed-only) |
 
 ## Pooled over all diagnosers
 
-- Blind restart: 75.0% (180/240) [69.2%, 80.1%]
-- Open loop: 97.9% (235/240) [95.2%, 99.1%]
-- Closed loop: 100.0% (240/240) [98.4%, 100.0%]
-- Closed vs blind restart: p < 0.001 (0 blind-only, 60 closed-only)
-- Closed vs open loop: p = 0.062 (0 open-only, 5 closed-only)
+- Blind restart: 75.0% (495/660) [71.6%, 78.2%]
+- Open loop: 95.5% (630/660) [93.6%, 96.8%]
+- Closed loop: 99.8% (659/660) [99.1%, 100.0%]
+- Closed vs blind restart: p < 0.001 (1 blind-only, 165 closed-only)
+- Closed vs open loop: p < 0.001 (0 open-only, 29 closed-only)
 
 ## By fault type (closed loop / open loop / blind restart)
 
 | Diagnoser | crash | error | memory | slow |
 |---|---|---|---|---|
 | rule-based | 15/15 / 15/15 / 15/15 | 15/15 / 15/15 / 15/15 | 15/15 / 15/15 / 15/15 | 15/15 / 15/15 / 0/15 |
-| gpt-oss-120b | 15/15 / 15/15 / 15/15 | 15/15 / 10/15 / 15/15 | 15/15 / 15/15 / 15/15 | 15/15 / 15/15 / 0/15 |
-| gpt-oss-20b | 15/15 / 15/15 / 15/15 | 15/15 / 15/15 / 15/15 | 15/15 / 15/15 / 15/15 | 15/15 / 15/15 / 0/15 |
-| qwen3-27b | 15/15 / 15/15 / 15/15 | 15/15 / 15/15 / 15/15 | 15/15 / 15/15 / 15/15 | 15/15 / 15/15 / 0/15 |
+| gpt-oss-120b | 50/50 / 50/50 / 50/50 | 50/50 / 22/50 / 50/50 | 50/50 / 50/50 / 50/50 | 50/50 / 50/50 / 0/50 |
+| gpt-oss-20b | 50/50 / 50/50 / 50/50 | 49/50 / 48/50 / 50/50 | 50/50 / 50/50 / 50/50 | 50/50 / 50/50 / 0/50 |
+| qwen3-27b | 50/50 / 50/50 / 50/50 | 50/50 / 50/50 / 50/50 | 50/50 / 50/50 / 50/50 | 50/50 / 50/50 / 0/50 |
 
 ## Reading this honestly
 

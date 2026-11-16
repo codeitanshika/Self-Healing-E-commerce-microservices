@@ -94,7 +94,7 @@ def _p(p):
 
 def render(res: dict) -> str:
     L = ["# Strategy comparison under strict healing", "",
-         "Every fault below is one of the 20 (service, fault) scenarios, repeated 3 times per diagnoser, with "
+         "Every fault below is one of the 20 (service, fault) scenarios, repeated per diagnoser (trials per diagnoser are in the table: n/20), with "
          "`STRICT_HEALING=1` (a fix only cures a fault it is effective against). Recovery is reported for:", "",
          "- **Blind restart**: always restart, no diagnosis, no verification (a Kubernetes liveness-probe analogue; analytic).",
          "- **Open loop**: apply the diagnoser's first fix once and trust it (paired with the closed loop's diagnosis).",
