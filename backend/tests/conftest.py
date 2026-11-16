@@ -18,3 +18,13 @@ def clean_bus():
         bus._event_log.clear()
         if _ == 0:
             yield
+
+
+import pytest  # noqa: E402
+
+
+@pytest.fixture(autouse=True)
+def _no_real_docker(monkeypatch):
+    """Keep tests hermetic: never pick up a real container, even if Docker is running."""
+    from services.docker_service import DockerService
+    monkeypatch.setattr(DockerService, "is_available", lambda self: False)

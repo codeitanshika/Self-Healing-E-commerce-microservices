@@ -42,6 +42,17 @@ Each incident is timed from its own injection (staggered cascades are listed sep
 | flash-sale | 2.89s (SD 0.67), 95% CI [2.63, 3.26] (n=15) |
 | slow-burn | 2.74s (SD 0.38), 95% CI [2.47, 2.93] (n=10) |
 
+## Real container (Nginx under Docker)
+
+A real `nginx` container joins as a sixth service. The fault is `docker stop`; the fix is a real `docker restart`; validation re-reads the container's real health. Rule-based diagnosis, 1s monitor poll. Reported separately from the simulated services above.
+
+- Incidents: 10, recovered: 10
+- MTTR: 10.01s (SD 1.66), 95% CI [8.89, 10.80]
+- Detection: 4.60s (SD 1.41), 95% CI [3.70, 5.33]
+- Validation: 4.84s (SD 0.41), 95% CI [4.61, 5.09]
+
+Caveats: only the `crash` fault has a real equivalent; the real service restarts the container whichever fix label is chosen, so this run shows the pipeline healing a genuinely stopped process, not fix-selection quality. Real restart plus a health-check wait makes MTTR several times the simulated figure.
+
 All incidents recovered: **True**; maximum retries used: **0**.
 
 ## Caveat

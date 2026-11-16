@@ -49,9 +49,14 @@ def _fmt(vals):
 
 
 def analyze(rows: list[dict]) -> dict:
+    real = [r for r in rows if r.get("service") == "nginx" and not r.get("scenario")]
+    rows = [r for r in rows if r not in real]
     single = [r for r in rows if not r.get("scenario")]
     scen = [r for r in rows if r.get("scenario")]
-    out = {"n": len(rows)}
+    out = {"n": len(rows), "real": {"n": len(real), "recovered": len(_ok(real)),
+                                    "mttr": [r["mttr_s"] for r in _ok(real)],
+                                    "detect": [r["detect_s"] for r in _ok(real) if r["detect_s"] is not None],
+                                    "validate": [r["validate_s"] for r in _ok(real) if r["validate_s"] is not None]}}
 
     ok = _ok(single)
     out["single"] = {
@@ -115,6 +120,20 @@ def render(res: dict, poll: float = 1.0) -> str:
         L += ["", "| Scenario | MTTR per incident |", "|---|---|"]
         for sc, v in res["by_scenario"].items():
             L.append(f"| {sc} | {_fmt(v)} (n={len(v)}) |")
+    rl = res.get("real", {})
+    if rl.get("n"):
+        L += ["", "## Real container (Nginx under Docker)", "",
+              "A real `nginx` container joins as a sixth service. The fault is `docker stop`; the fix is a real "
+              "`docker restart`; validation re-reads the container's real health. Rule-based diagnosis, "
+              f"{poll:g}s monitor poll. Reported separately from the simulated services above.", "",
+              f"- Incidents: {rl['n']}, recovered: {rl['recovered']}",
+              f"- MTTR: {_fmt(rl['mttr'])}",
+              f"- Detection: {_fmt(rl['detect'])}",
+              f"- Validation: {_fmt(rl['validate'])}", "",
+              "Caveats: only the `crash` fault has a real equivalent; the real service restarts the container "
+              "whichever fix label is chosen, so this run shows the pipeline healing a genuinely stopped process, "
+              "not fix-selection quality. Real restart plus a health-check wait makes MTTR several times the "
+              "simulated figure."]
     L += ["", f"All incidents recovered: **{res['all_recovered']}**; maximum retries used: **{res['max_retries']}**.",
           "", "## Caveat", "",
           "The simulated services always heal when asked, so first-try success is 100% by construction. "
