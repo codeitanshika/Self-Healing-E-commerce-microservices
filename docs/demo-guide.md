@@ -53,7 +53,7 @@ Optional real container (needs Docker Desktop running): `docker compose up -d`, 
 | 3:30 | Run **Flash-sale surge** (3 faults at once) | "Three services fail simultaneously. Incidents are handled concurrently." |
 | 4:30 | Run **Checkout cascade** | "One failure drags others down seconds later." |
 | 5:00 | Click **Table** on a chart | "Every chart has an accessible table view." |
-| 5:30 | Show `docs/results/figures/fig8_strategies.png` | "With strict healing, a blind restart recovers 75%. The closed loop recovers everything, even when the model's first fix is wrong." |
+| 5:30 | Show `docs/results/figures/fig8_strategies.png` | "In our experiments a blind restart recovered 75% of incidents and the closed loop 99.8%, including cases where the model's first fix was wrong." |
 
 ## If something goes wrong on stage
 
@@ -61,7 +61,7 @@ Optional real container (needs Docker Desktop running): `docker compose up -d`, 
 |---|---|
 | Pill says "Backend unreachable" | Backend terminal not running or wrong port; restart uvicorn |
 | "Reconnecting..." pill | Stream dropped; it reconnects on its own within seconds |
-| Diagnosis says `unknown` | Groq unreachable or key invalid; the system falls back to a restart and still recovers crashes. Check `GROQ_API_KEY`. |
+| Diagnosis says `unknown` | Groq unreachable or key invalid; the system falls back to a restart, then tries other fixes if the service is still broken. Check `GROQ_API_KEY`. |
 | Service stuck anomalous | Click **Reset demo data**, or `POST /api/services/<name>/heal` |
 | Nothing happens on Inject | If you set `API_KEY`, the frontend needs a matching `VITE_API_KEY` |
 

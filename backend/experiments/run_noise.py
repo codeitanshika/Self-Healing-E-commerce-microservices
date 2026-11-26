@@ -18,6 +18,9 @@ fix cured every fault. This experiment tests it directly:
 
     python -m experiments.run_noise --trials 30
       -> experiments/noise_closed_loop.csv
+
+Runs with RETRY_POLICY=repeat, the policy behind the published results. Export
+RETRY_POLICY=distinct to measure the application's default policy instead.
 """
 import argparse
 import asyncio
@@ -29,7 +32,6 @@ import time
 
 sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-os.environ["STRICT_HEALING"] = "1"           # the whole point of this experiment
 
 from agents import monitor_agent as monitor_module  # noqa: E402
 from agents.fix_agent import FixAgent  # noqa: E402
@@ -154,6 +156,8 @@ async def main():
     ap.add_argument("--settle", type=float, default=0.4,
                     help="validation wait (s); shortened from 2 s since it does not affect correctness")
     args = ap.parse_args()
+    os.environ["STRICT_HEALING"] = "1"        # the whole point of this experiment
+    os.environ.setdefault("RETRY_POLICY", "repeat")
 
     rows = []
     for p in [float(x) for x in args.levels.split(",")]:

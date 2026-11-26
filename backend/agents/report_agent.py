@@ -64,7 +64,12 @@ class ReportAgent:
         # Pull the rest of the incident's details from the shared cache
         # (root_cause, fix_applied, etc. were stored there earlier
         #  by the Orchestrator as the incident progressed)
-        details = self.incident_cache.get(incident_id, {})
+        details = self.incident_cache.get(incident_id)
+        if details is None:
+            # the cache was cleared (demo reset) while this incident was in
+            # flight; logging it would put a blank row into the fresh history
+            print(f"[ReportAgent] ⚠️ unknown incident {incident_id}, not logging")
+            return
 
         incident_id_saved = self.log_incident(
             service=service,

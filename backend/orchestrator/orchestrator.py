@@ -7,8 +7,8 @@ What it does:
 - Subscribes to ANOMALY_DETECTED, DIAGNOSIS_READY, FIX_APPLIED, VALIDATION_RESULT
 - Drives the sequence: diagnose -> fix -> validate
 - Maintains incident_cache (memory across the event chain)
-- Implements the retry loop: if STILL_BROKEN, try the next fix
-  for that root cause, up to MAX_RETRIES, then ESCALATED
+- Implements the retry loop: if STILL_BROKEN, try a fix that has not
+  been tried yet, up to MAX_RETRIES, then ESCALATED
 
 This is the only agent that subscribes to MULTIPLE topics —
 every other agent subscribes to exactly one.
@@ -21,7 +21,7 @@ from shared.events import (
     ANOMALY_DETECTED, DIAGNOSE_REQUEST, DIAGNOSIS_READY,
     FIX_REQUEST, FIX_APPLIED, VALIDATE_REQUEST, VALIDATION_RESULT,
 )
-from shared.config import FIX_MAP, MAX_RETRIES
+from shared.config import MAX_RETRIES, next_retry_fix
 
 
 class Orchestrator:
@@ -92,6 +92,7 @@ class Orchestrator:
             "business_impact": payload["business_impact"],
             "explanation":     payload["explanation"],
             "fix_applied":     payload["fix"],   # the fix we're ABOUT to try
+            "fixes_tried":     [payload["fix"]],
             "stage":           "fixing",
         })
         self._record(
@@ -182,8 +183,10 @@ class Orchestrator:
 
         # retry with the NEXT fix for this root cause
         root_cause = cached.get("root_cause", "unknown")
-        next_fix = FIX_MAP.get(root_cause, FIX_MAP["unknown"])["retry"]
+        tried = cached.setdefault("fixes_tried", [])
+        next_fix = next_retry_fix(root_cause, tried)
 
+        tried.append(next_fix)
         cached["retry_count"] += 1
         cached["fix_applied"] = next_fix
         cached["stage"] = "fixing"

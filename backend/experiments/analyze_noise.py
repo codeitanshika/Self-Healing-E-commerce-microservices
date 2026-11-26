@@ -108,7 +108,8 @@ def render(res: dict) -> str:
           "- The diagnoser's errors are synthetic and uniform over wrong root causes; real LLM errors are "
           "correlated with metric patterns, so this shows the *mechanism's* value, not a forecast of production "
           "accuracy.",
-          "- Retry picks the alternate fix for the (wrong) diagnosed cause, it does not re-diagnose. Some wrong "
+          "- These runs used `RETRY_POLICY=repeat`: retry picks the alternate fix for the (wrong) diagnosed cause "
+          "(the same one both times), it does not re-diagnose. Some wrong "
           "diagnoses therefore remain unrecoverable within the retry budget and escalate; that residual is the "
           "honest cost of this simple retry policy and motivates re-diagnosis on failure as future work.",
           "- Whether a fix is 'effective' is defined by the simulator's table (`EFFECTIVE_FIXES`). It encodes "

@@ -142,6 +142,14 @@ class ServiceManager:
             print(f"✅ HEALED: {name} via {fix_type}")
         return result
 
+    def reset_service(self, name: str):
+        """Force a service back to healthy (demo reset, not a remediation)."""
+        service = self.services[name]
+        if isinstance(service, SimulatedService):
+            service.reset()
+        else:
+            service.heal("restart")   # a real container can only be restarted
+
     # ────────────────────────────────────────────────────────────
     # HELPERS FOR AGENTS
     # ────────────────────────────────────────────────────────────

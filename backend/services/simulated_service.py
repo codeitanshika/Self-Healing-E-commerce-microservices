@@ -163,14 +163,7 @@ class SimulatedService:
                 "timestamp":      time.time(),
             }
 
-        # Reset all metrics to healthy values
-        self.status = "ok"
-        self.response_time_ms = random.randint(30, 80)
-        self.error_rate = 0.0
-        self.memory_percent = random.uniform(35.0, 55.0)
-        self.cpu_percent = random.uniform(10.0, 25.0)
-        self.active_fault = None
-        self.fault_injected_at = None
+        self.reset()
         self.heal_count += 1
 
         return {
@@ -184,6 +177,24 @@ class SimulatedService:
             "message":        f"{self.name} healed via {fix_type}",
             "timestamp":      time.time(),
         }
+
+    # ────────────────────────────────────────────────────────────
+    # RESET
+    # ────────────────────────────────────────────────────────────
+
+    def reset(self):
+        """
+        Return to healthy whatever the fault is. This is the operator's
+        override (demo reset), not a remediation, so strict healing does
+        not apply and heal_count is not incremented.
+        """
+        self.status = "ok"
+        self.response_time_ms = random.randint(30, 80)
+        self.error_rate = 0.0
+        self.memory_percent = random.uniform(35.0, 55.0)
+        self.cpu_percent = random.uniform(10.0, 25.0)
+        self.active_fault = None
+        self.fault_injected_at = None
 
     # ────────────────────────────────────────────────────────────
     # PRIVATE: simulate natural traffic fluctuations

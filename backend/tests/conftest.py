@@ -20,9 +20,6 @@ def clean_bus():
             yield
 
 
-import pytest  # noqa: E402
-
-
 @pytest.fixture(autouse=True)
 def _no_real_docker(monkeypatch):
     """Keep tests hermetic: never pick up a real container, even if Docker is running."""

@@ -98,7 +98,7 @@ def render(res: dict) -> str:
          "`STRICT_HEALING=1` (a fix only cures a fault it is effective against). Recovery is reported for:", "",
          "- **Blind restart**: always restart, no diagnosis, no verification (a Kubernetes liveness-probe analogue; analytic).",
          "- **Open loop**: apply the diagnoser's first fix once and trust it (paired with the closed loop's diagnosis).",
-         "- **Closed loop**: the real pipeline: validate, retry an alternate fix, escalate after 2 retries (measured).", "",
+         "- **Closed loop**: the real pipeline: validate, retry an alternate fix, escalate after 2 retries (measured with `RETRY_POLICY=repeat`: both retries use the same alternate).", "",
          "Cells: recovery rate (successes/n) with a 95% Wilson interval.", "",
          "| Diagnoser | Diagnosis accuracy | Blind restart | Open loop | Closed loop | Needed a retry | Escalated | Closed vs open (McNemar) |",
          "|---|---|---|---|---|---|---|---|"]

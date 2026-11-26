@@ -34,4 +34,4 @@ Closed minus blind restart: median +24.8, 5th-95th percentile [-0.2, +54.8].
 
 - Closed loop >= open loop holds by construction on every table: the closed loop applies the same first fix, then more. So that comparison cannot flip sign; only its *size* depends on the table.
 - Closed loop vs blind restart is the table-dependent claim. If restart cures every fault (the adversarial row), a blind restart is perfect and the closed loop has no advantage over it on recovery rate; the closed loop's remaining value there is diagnosis and an audit trail.
-- The replay assumes retries repeat `FIX_MAP[diagnosis]['retry']`, which is how the orchestrator behaves, and ignores timing (MTTR is not re-estimated).
+- The replay assumes retries repeat `FIX_MAP[diagnosis]['retry']` (`RETRY_POLICY=repeat`, the policy the incidents were recorded under, not the application's current default) and ignores timing (MTTR is not re-estimated).

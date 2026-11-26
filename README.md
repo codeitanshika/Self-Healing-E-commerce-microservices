@@ -3,7 +3,7 @@
 > Autonomous incident response for e-commerce microservices: AI agents detect, diagnose, fix, and verify failures — closed-loop, with zero human intervention and zero paid APIs.
 
 ![status](https://img.shields.io/badge/status-in%20development-yellow)
-![python](https://img.shields.io/badge/python-3.11+-blue)
+![python](https://img.shields.io/badge/python-3.12+-blue)
 ![react](https://img.shields.io/badge/react-19-61dafb)
 ![tests](https://github.com/codeitanshika/Self-Healing-E-commerce-microservices/actions/workflows/ci.yml/badge.svg)
 ![license](https://img.shields.io/badge/license-MIT-green)
@@ -14,7 +14,7 @@
 
 | | URL |
 |---|---|
-| **Dashboard** | https://self-healing-e-commerce-microservices-aax3tmiok-anshika494shiv.vercel.app |
+| **Dashboard** | https://self-healing-e-commerce-microservic.vercel.app |
 | **API Docs** | https://self-healing-backend-m1e1.onrender.com/docs |
 
 > First load may take 30–50 seconds — the free backend tier sleeps after inactivity and needs to wake up.
@@ -80,7 +80,7 @@ flowchart TB
     REP -->|"INCIDENT_LOGGED"| DB
 ```
 
-**Key design choice:** agents never call each other directly. They publish and subscribe to events on a lightweight in-process event bus — our own replacement for enterprise tools like Solace Agent Mesh. This keeps the system decoupled, testable, and is itself part of the research contribution. If validation reports the service is still broken, the Orchestrator retries with an alternate fix (up to 2 times) before escalating.
+**Key design choice:** agents never call each other directly. They publish and subscribe to events on a lightweight in-process event bus — our own replacement for enterprise tools like Solace Agent Mesh. This keeps the system decoupled, testable, and is itself part of the research contribution. If validation reports the service is still broken, the Orchestrator retries with a fix it has not tried yet (up to 2 retries) before escalating.
 
 ### The 5 agents
 
@@ -92,7 +92,7 @@ flowchart TB
 | **Validation** | Re-checks the service — did it actually recover? | `VALIDATION_RESULT` |
 | **Report** | Writes the incident + MTTR to the database | `INCIDENT_LOGGED` |
 
-The **Orchestrator** sequences these agents end-to-end and owns the retry loop (up to 2 retries with an alternate fix, then escalates).
+The **Orchestrator** sequences these agents end-to-end and owns the retry loop (up to 2 retries, each with a different fix, then escalates).
 
 ---
 
@@ -166,7 +166,7 @@ A dark operations console built for demonstrating the loop live:
 ## Getting started
 
 ### Prerequisites
-- Python 3.11+ and Node.js 18+
+- Python 3.12+ (the analysis packages in `requirements-dev.txt` need it; CI uses 3.13) and Node.js 20.19+
 - A free Groq API key from [console.groq.com](https://console.groq.com) (no card required). Only the LLM mode needs it; `--mode rule` experiments and the whole test suite run without one.
 - Optional: Docker Desktop, for the real Nginx service.
 
@@ -211,6 +211,10 @@ cd ../frontend && npm run lint && npm run build
 | `MONITOR_POLL_INTERVAL` | `5` | Seconds between health sweeps |
 | `API_KEY` | empty (open) | If set, fault-injection, heal and scenario endpoints require `X-API-Key`. Set it on any public deployment, and `VITE_API_KEY` in the frontend. |
 | `RATE_LIMIT_MAX` / `RATE_LIMIT_WINDOW` | `20` / `60` | Per-IP limit on mutating endpoints |
+| `STRICT_HEALING` | `1` | Only a fix that suits the fault cures it (`EFFECTIVE_FIXES` in `shared/config.py`). `0` lets any fix cure any fault |
+| `RETRY_POLICY` | `distinct` | Each retry tries a new fix. `repeat` reuses the mapped retry fix, as in the published experiments |
+
+`VITE_API_KEY` is compiled into the public JavaScript bundle, so on a public dashboard anyone can read it. Treat `API_KEY` there as a deterrent against casual abuse, not as access control.
 
 ### API overview
 
@@ -222,6 +226,7 @@ cd ../frontend && npm run lint && npm run build
 | `GET /api/stats`, `/api/mttr-chart`, `/api/revenue-series`, `/api/breakdown` | Aggregates behind the dashboard |
 | `POST /api/services/{name}/fault/{type}` | Inject `crash \| slow \| memory \| error` *(auth + rate-limited)* |
 | `GET /api/scenarios`, `POST /api/scenarios/{id}/run` | Multi-fault and cascade scenarios *(run is auth + rate-limited)* |
+| `POST /api/admin/reset?confirm=true` | Wipe incident history and restore every service *(auth + rate-limited)* |
 
 Watch the loop fire from a terminal:
 ```bash
@@ -230,6 +235,8 @@ curl -N http://localhost:8000/api/stream
 ```
 
 ### Reproduce the research results
+The runners overwrite the CSVs in `experiments/`. Each one pins the healing and retry settings behind the published numbers; export `STRICT_HEALING` or `RETRY_POLICY` to override.
+
 ```bash
 cd backend
 # 1) Original benchmark: 20 scenarios x 3 trials per model (needs GROQ_API_KEY)
@@ -242,7 +249,14 @@ python -m experiments.run_pipeline --scenario everything-breaks --trials 5 --mod
 # 3) Real Docker container evidence (Docker Desktop running + `docker compose up -d`)
 python -m experiments.run_pipeline --service nginx --fault crash --trials 10 --mode rule
 
-# 4) Statistics (CIs, McNemar, Kruskal-Wallis) and publication figures
+# 4) Verify-and-retry under forced misdiagnosis, and the strategy comparison
+python -m experiments.run_noise --trials 40
+python -m experiments.run_strategies --mode llm --model openai/gpt-oss-120b --trials 10
+python -m experiments.analyze_noise
+python -m experiments.analyze_strategies
+python -m experiments.sensitivity
+
+# 5) Statistics (CIs, McNemar, Kruskal-Wallis) and publication figures
 python -m experiments.analyze          # -> docs/results/statistics.md
 python -m experiments.make_figures     # -> docs/results/figures/*.png|pdf
 ```
@@ -251,16 +265,32 @@ python -m experiments.make_figures     # -> docs/results/figures/*.png|pdf
 
 ## Research findings
 
-Latest run (September 2026, 180 trials across 3 free Groq models):
+### Does closing the loop help?
+
+Strict healing, 20 fault scenarios, 660 incidents pooled over three LLMs and the rule baseline ([full table](docs/results/strategy-comparison.md)):
+
+| Strategy | Recovery rate |
+|---|---|
+| Blind restart (no diagnosis, no verification) | 75.0% |
+| Open loop (diagnose, apply once, trust it) | 95.5% |
+| Closed loop (verify, retry, escalate) | 99.8% |
+
+- The gain over the open loop comes almost entirely from `gpt-oss-120b` (86% to 100%); for the other diagnosers the difference is not statistically significant.
+- With diagnosis deliberately corrupted, the closed loop recovered 92% against 66% open loop ([details](docs/results/verification-under-noise.md)).
+- The advantage over blind restart depends on which fixes are assumed to work. If a restart cured everything it would disappear ([sensitivity](docs/results/sensitivity.md)).
+- These runs used `RETRY_POLICY=repeat`. The application now defaults to `distinct`, which has not been measured in a live experiment.
+
+### Diagnosis accuracy and speed
+
+180 trials across 3 free Groq models, run with any-fix-heals (`STRICT_HEALING=0`):
 
 | Metric | Result |
 |---|---|
 | LLM diagnosis accuracy (pooled) | 99.4% (179/180) |
 | Rule-based baseline accuracy | 100% (180/180) |
 | Mean MTTR | 3.20s vs. a 900s manual baseline (~99.6% reduction) |
-| Model dependency | Accuracy held up across all 3 models tested — not locked to one vendor's model |
 
-The one LLM miss was a transient API/JSON-parsing failure caught by the system's safe-default fallback, not a reasoning error. Full breakdown, per-model numbers, and honest caveats (e.g. why "recovery rate" isn't yet a fix-sensitive metric) live in [`docs/results/model-comparison.md`](docs/results/model-comparison.md) and [`backend/experiments/findings.md`](backend/experiments/findings.md).
+The one LLM miss was a transient API/JSON-parsing failure caught by the system's safe-default fallback, not a reasoning error. Per-model numbers and caveats: [`docs/results/model-comparison.md`](docs/results/model-comparison.md), [`backend/experiments/findings.md`](backend/experiments/findings.md). A real Nginx container recovered 10/10 times with a mean MTTR of 10.0s ([pipeline latency](docs/results/pipeline-latency.md)).
 
 This project targets a publishable paper — the contribution is a lightweight, event-driven, LLM-diagnosed closed-loop self-healing system, runnable on commodity hardware at zero API cost, evaluated against a manual-response baseline on a reproducible testbed. Outline and methodology: [`docs/research-paper.md`](docs/research-paper.md).
 

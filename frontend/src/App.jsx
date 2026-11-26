@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from "react";
+import { lazy, Suspense, useCallback, useMemo, useState } from "react";
 import { usePolling, useEventStream } from "./lib/hooks";
 import { TopBar } from "./components/TopBar";
 import { KpiStrip } from "./components/KpiStrip";
@@ -8,7 +8,14 @@ import { EventFeed } from "./components/EventFeed";
 import { FaultLab } from "./components/FaultLab";
 import { IncidentTable } from "./components/IncidentTable";
 import { IncidentDrawer } from "./components/IncidentDrawer";
-import { MttrByCause, MttrTrend, RevenueArea, ServiceBreakdown } from "./components/Charts";
+
+// If the chunk fails to load (offline, or replaced by a newer deploy), keep the
+// rest of the console working instead of blanking the page.
+const Performance = lazy(() =>
+  import("./components/Performance").catch(() => ({
+    default: () => <div className="notice err">Charts could not load. Reload the page to retry.</div>,
+  })),
+);
 
 export default function App() {
   const { events, connected } = useEventStream();
@@ -61,12 +68,15 @@ export default function App() {
             <h2 className="section-title">Performance</h2>
             <span className="section-sub">Every chart has a table view</span>
           </div>
-          <div className="grid cols-2">
-            <MttrByCause data={mttr.data} baseline={stats.data?.baseline_mttr_seconds ?? 900} />
-            <RevenueArea data={revenue.data} />
-            <MttrTrend incidents={incidents.data} />
-            <ServiceBreakdown data={breakdown.data} />
-          </div>
+          <Suspense fallback={<div className="skeleton" style={{ height: 320 }} />}>
+            <Performance
+              mttr={mttr.data}
+              baseline={stats.data?.baseline_mttr_seconds ?? 900}
+              revenue={revenue.data}
+              incidents={incidents.data}
+              breakdown={breakdown.data}
+            />
+          </Suspense>
         </div>
 
         <div className="section">

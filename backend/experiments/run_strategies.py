@@ -22,6 +22,9 @@ the same diagnosis), comparisons are paired.
     python -m experiments.run_strategies --mode llm  --model openai/gpt-oss-120b --trials 3
     python -m experiments.run_strategies --mode rule --trials 3
       -> experiments/strategies_<name>.csv
+
+Runs with RETRY_POLICY=repeat, the policy behind the published results. Export
+RETRY_POLICY=distinct to measure the application's default policy instead.
 """
 import argparse
 import asyncio
@@ -32,7 +35,6 @@ import time
 
 sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-os.environ["STRICT_HEALING"] = "1"
 
 from agents import monitor_agent as monitor_module  # noqa: E402
 from agents.validation_agent import ValidationAgent  # noqa: E402
@@ -113,6 +115,8 @@ async def main():
     ap.add_argument("--settle", type=float, default=0.5,
                     help="validation wait in s (shortened from 2 s; does not affect correctness)")
     args = ap.parse_args()
+    os.environ["STRICT_HEALING"] = "1"
+    os.environ.setdefault("RETRY_POLICY", "repeat")
 
     if args.mode == "llm":
         if not args.model:

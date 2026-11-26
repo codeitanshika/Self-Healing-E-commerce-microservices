@@ -9,7 +9,15 @@ def strict(monkeypatch):
     monkeypatch.setenv("STRICT_HEALING", "1")
 
 
-def test_default_mode_any_fix_heals():
+def test_strict_is_the_default(monkeypatch):
+    monkeypatch.delenv("STRICT_HEALING", raising=False)
+    m = ServiceManager()
+    m.inject_fault("cart", "crash")
+    assert m.heal_service("cart", "reduce_load")["effective"] is False
+
+
+def test_legacy_mode_any_fix_heals(monkeypatch):
+    monkeypatch.setenv("STRICT_HEALING", "0")
     m = ServiceManager()
     m.inject_fault("cart", "crash")
     m.heal_service("cart", "reduce_load")        # nonsense for a crash...
@@ -31,6 +39,14 @@ def test_strict_mode_effective_fix_heals(strict):
             m.inject_fault("auth", fault)
             assert m.heal_service("auth", fix)["effective"] is True
             assert m.is_service_healthy("auth")
+
+
+def test_reset_restores_a_fault_that_restart_cannot_cure(strict):
+    m = ServiceManager()
+    m.inject_fault("cart", "slow")
+    m.reset_service("cart")
+    assert m.is_service_healthy("cart")
+    assert m.services["cart"].heal_count == 0
 
 
 def test_every_correct_primary_fix_is_effective():

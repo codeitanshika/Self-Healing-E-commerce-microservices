@@ -76,9 +76,12 @@ def test_reset_requires_key_and_confirmation_and_clears_data(client, monkeypatch
         assert len(s.exec(select(models.Incident)).all()) == 1                 # still there
 
     client.post("/api/services/auth/fault/crash", headers=h)
+    client.post("/api/services/cart/fault/slow", headers=h)      # restart cannot cure this
     r = client.post("/api/admin/reset?confirm=true", headers=h)
     assert r.status_code == 200 and r.json()["incidents_deleted"] == 1
-    assert "auth" in r.json()["services_healed"]
+    assert {"auth", "cart"} <= set(r.json()["services_healed"])
+    import main
+    assert main.manager.is_service_healthy("auth") and main.manager.is_service_healthy("cart")
     with Session(engine) as s:
         assert s.exec(select(models.Incident)).all() == []
         assert s.exec(select(models.IncidentStage)).all() == []

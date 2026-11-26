@@ -4,7 +4,7 @@ Every fault below is one of the 20 (service, fault) scenarios, repeated per diag
 
 - **Blind restart**: always restart, no diagnosis, no verification (a Kubernetes liveness-probe analogue; analytic).
 - **Open loop**: apply the diagnoser's first fix once and trust it (paired with the closed loop's diagnosis).
-- **Closed loop**: the real pipeline: validate, retry an alternate fix, escalate after 2 retries (measured).
+- **Closed loop**: the real pipeline: validate, retry an alternate fix, escalate after 2 retries (measured with `RETRY_POLICY=repeat`: both retries use the same alternate).
 
 Cells: recovery rate (successes/n) with a 95% Wilson interval.
 

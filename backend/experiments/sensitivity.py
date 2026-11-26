@@ -4,7 +4,8 @@ sensitivity.py
 Does the strategy comparison depend on our hand-written EFFECTIVE_FIXES table?
 
 The closed loop's fix sequence is deterministic given its diagnosis: the first
-fix is the diagnoser's own choice, every retry is FIX_MAP[diagnosis]["retry"].
+fix is the diagnoser's own choice, and under RETRY_POLICY=repeat (how the
+incidents were recorded) every retry is FIX_MAP[diagnosis]["retry"].
 So the 660 recorded strategy incidents can be REPLAYED under any other
 "which fix cures which fault" table without re-running the LLMs:
 
@@ -156,8 +157,9 @@ def render(data: dict) -> tuple[str, dict]:
           "- Closed loop vs blind restart is the table-dependent claim. If restart cures every fault "
           "(the adversarial row), a blind restart is perfect and the closed loop has no advantage over it "
           "on recovery rate; the closed loop's remaining value there is diagnosis and an audit trail.",
-          "- The replay assumes retries repeat `FIX_MAP[diagnosis]['retry']`, which is how the orchestrator behaves, "
-          "and ignores timing (MTTR is not re-estimated).", ""]
+          "- The replay assumes retries repeat `FIX_MAP[diagnosis]['retry']` (`RETRY_POLICY=repeat`, the policy the "
+          "incidents were recorded under, not the application's current default) and ignores timing "
+          "(MTTR is not re-estimated).", ""]
     return "\n".join(L), {"mc": mc, "hand": hand, "replay": (ok, total)}
 
 

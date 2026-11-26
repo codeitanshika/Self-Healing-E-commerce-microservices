@@ -107,7 +107,7 @@ This is the single most important thing to understand. Walk through it until you
 8. **Reporting.** Report Agent hears the result, writes the incident to SQLite: service, root cause, fix, RECOVERED, MTTR=47s, revenue protected.
 9. **Dashboard updates.** On its next poll the React frontend sees the new incident row and the healthy tile, and shows "RECOVERED in 47s".
 
-**If validation says STILL_BROKEN:** the Orchestrator picks the *next* fix in the priority list for that root cause and loops back to step 6. After 2 failed retries it marks the incident `ESCALATED` (in real life: page a human).
+**If validation says STILL_BROKEN:** the Orchestrator picks a *different* fix it has not tried yet (starting with the retry fix listed for that root cause) and loops back to step 6. After 2 failed retries it marks the incident `ESCALATED` (in real life: page a human).
 
 ---
 

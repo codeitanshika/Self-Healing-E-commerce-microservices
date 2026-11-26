@@ -194,7 +194,7 @@ def reset_demo_data(confirm: bool = False):
     healed = []
     for name in list(manager.services):
         if not manager.is_service_healthy(name):
-            manager.heal_service(name, "restart")
+            manager.reset_service(name)
             healed.append(name)
     return {**removed, "services_healed": healed, "status": "reset"}
 

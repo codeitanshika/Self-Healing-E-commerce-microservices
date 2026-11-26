@@ -1,6 +1,8 @@
 """Drive the Orchestrator purely through bus events and observe what it asks for."""
 import asyncio
 
+import pytest
+
 from orchestrator.event_bus import bus
 from orchestrator.orchestrator import Orchestrator
 from shared.config import FIX_MAP, MAX_RETRIES
@@ -70,7 +72,12 @@ def test_recovered_closes_incident():
     assert orch.get_active_incident() is None
 
 
-def test_still_broken_retries_with_alternate_fix_then_escalates():
+@pytest.mark.parametrize("policy, expected", [
+    ("distinct", ["restart", "reduce_load", "clear_memory"]),
+    ("repeat",   ["restart"] + [FIX_MAP["service_crash"]["retry"]] * MAX_RETRIES),
+])
+def test_still_broken_retries_then_escalates(monkeypatch, policy, expected):
+    monkeypatch.setenv("RETRY_POLICY", policy)
     orch, sent = make()
 
     async def go():
@@ -83,7 +90,7 @@ def test_still_broken_retries_with_alternate_fix_then_escalates():
 
     iid = asyncio.run(go())
     fixes = [r["fix"] for r in sent[FIX_REQUEST]]
-    assert fixes == ["restart"] + [FIX_MAP["service_crash"]["retry"]] * MAX_RETRIES
+    assert fixes == expected
     assert orch.incident_cache[iid]["retry_count"] == MAX_RETRIES
     assert orch.incident_cache[iid]["status"] == "ESCALATED"
     assert any(r["result"] == "ESCALATED" for r in sent[VALIDATION_RESULT])

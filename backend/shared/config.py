@@ -73,11 +73,11 @@ REVENUE_PER_SECOND = {
 }
 
 # ── Fix effectiveness (strict healing mode) ──────────────────────
-# By default SimulatedService.heal() cures ANY fault with ANY fix, which makes
-# recovery rate tautological (see paper Section 6.1). With STRICT_HEALING=1 a
-# fix only cures the faults listed here; an ineffective fix leaves the service
-# broken, so the Validation Agent reports STILL_BROKEN and the Orchestrator's
-# retry/escalation loop is exercised by genuinely wrong diagnoses.
+# A fix only cures the faults listed here: an ineffective fix leaves the
+# service broken, so the Validation Agent reports STILL_BROKEN and the
+# Orchestrator's retry/escalation loop is exercised by genuinely wrong choices.
+# STRICT_HEALING=0 restores the old behaviour, where ANY fix cures ANY fault
+# (which makes recovery rate tautological).
 #
 #   crash  : only a restart revives a dead process
 #   memory : clearing memory, or restarting, frees the leak
@@ -92,8 +92,34 @@ EFFECTIVE_FIXES = {
 
 
 def strict_healing() -> bool:
-    """Read at call time so tests and experiments can toggle it."""
-    return os.getenv("STRICT_HEALING", "0") == "1"
+    """On unless STRICT_HEALING=0. Read at call time so it can be toggled."""
+    return os.getenv("STRICT_HEALING", "1") != "0"
+
+
+# ── Retry policy ────────────────────────────────────────────────
+# Every fix the Fix Agent can execute, in the order used once a root cause's
+# own fixes from FIX_MAP have been tried.
+FIX_TYPES = ("restart", "reduce_load", "clear_memory", "retry_with_backoff", "reroute_traffic")
+
+
+def retry_policy() -> str:
+    """
+    "distinct" (default): every retry is a fix not yet tried on this incident.
+    "repeat": every retry is FIX_MAP[root_cause]["retry"], even if it already
+    failed. The published noise and strategy results were recorded this way.
+    """
+    return "repeat" if os.getenv("RETRY_POLICY", "distinct") == "repeat" else "distinct"
+
+
+def next_retry_fix(root_cause: str, tried: list[str]) -> str:
+    """The fix to apply after the ones in `tried` left the service broken."""
+    mapped = FIX_MAP.get(root_cause, FIX_MAP["unknown"])
+    if retry_policy() == "repeat":
+        return mapped["retry"]
+    # the Fix Agent runs an unrecognised fix name as a restart
+    done = {fix if fix in FIX_TYPES else "restart" for fix in tried}
+    candidates = (mapped["retry"], mapped["primary"], *FIX_TYPES)
+    return next((fix for fix in candidates if fix not in done), mapped["retry"])
 
 
 # ── Orchestrator settings ────────────────────────────────────────

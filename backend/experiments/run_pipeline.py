@@ -258,6 +258,8 @@ async def main():
     ap.add_argument("--mode", choices=["rule", "llm"], default="rule")
     ap.add_argument("--poll", type=float, default=1.0, help="monitor poll interval (s)")
     args = ap.parse_args()
+    # published results used legacy healing; export STRICT_HEALING=1 to change
+    os.environ.setdefault("STRICT_HEALING", "0")
 
     manager = ServiceManager()
     if args.scenario:

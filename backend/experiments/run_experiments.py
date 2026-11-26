@@ -174,6 +174,8 @@ async def main(model: str):
 
     # override the model in environment
     os.environ["GROQ_MODEL"] = model
+    # published results used legacy healing; export STRICT_HEALING=1 to change
+    os.environ.setdefault("STRICT_HEALING", "0")
 
     manager = ServiceManager()
     diagnosis_agent = DiagnosisAgent()

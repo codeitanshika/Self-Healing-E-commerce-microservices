@@ -38,7 +38,7 @@ Say you click **Inject crash into payment**.
 | 6 | The Fix Agent calls `heal()` on the service. | `FixAgent.apply_fix`, `agents/fix_agent.py` -> `SimulatedService.heal` |
 | 7 | The Orchestrator asks for validation. The Validation Agent waits 2 s, then re-reads the **real** health. It never trusts the fix. | `ValidationAgent.validate`, `agents/validation_agent.py` |
 | 8a | Healthy -> `RECOVERED`. | `Orchestrator.on_validation_result` |
-| 8b | Still broken -> the Orchestrator picks the next fix from `FIX_MAP[root_cause]["retry"]` and loops. After `MAX_RETRIES = 2` it marks the incident `ESCALATED`, the point where a human would be paged. | same function; `FIX_MAP`, `MAX_RETRIES` in `shared/config.py` |
+| 8b | Still broken -> the Orchestrator picks a fix it has not tried yet (the mapped retry fix first, `next_retry_fix`) and loops. After `MAX_RETRIES = 2` it marks the incident `ESCALATED`, the point where a human would be paged. | same function; `FIX_MAP`, `next_retry_fix`, `MAX_RETRIES` in `shared/config.py` |
 | 9 | The Report Agent writes one row (MTTR, revenue protected, retries) and the stage timeline. Only this agent writes to the database. | `ReportAgent.log_incident`, `log_timeline` in `agents/report_agent.py`; tables in `database/models.py` |
 | 10 | Every event above was also broadcast to the browser, so the pipeline view and event feed moved in real time. | `EventBus.publish` + `StreamHub` in `orchestrator/event_bus.py`, `shared/stream.py`; `/api/stream` in `main.py` |
 
@@ -50,7 +50,7 @@ Say you click **Inject crash into payment**.
 
 **Why one LLM agent.** Four agents are plain deterministic code. Only diagnosis needs reasoning, so only it calls a model.
 
-**Strict healing** (`shared/config.py`: `EFFECTIVE_FIXES`, `strict_healing()`). Off by default: any fix cures any fault (the original behavior). With `STRICT_HEALING=1`, only an effective fix cures a given fault (a restart does not cure an overload). This makes "recovered" depend on the fix chosen, so verify-and-retry can be measured.
+**Strict healing** (`shared/config.py`: `EFFECTIVE_FIXES`, `strict_healing()`). On by default: only an effective fix cures a given fault (a restart does not cure an overload), so "recovered" depends on the fix chosen and verify-and-retry can be measured. `STRICT_HEALING=0` restores the original any-fix-heals behavior. Demo reset bypasses this and restores every service.
 
 **Scenarios** (`fault_injector/scenarios.py`). Scripted multi-fault and cascade incidents, launched with `POST /api/scenarios/{id}/run`.
 
@@ -83,4 +83,4 @@ Say you click **Inject crash into payment**.
 
 ## 7. Tests
 
-`backend/tests/` (66 tests): event bus, orchestrator retry and escalation, fix map, monitor, API auth and reset, strict healing, LLM client parsing and retry, statistics, and the experiment harness. Run `python -m pytest -q` from `backend/`.
+`backend/tests/` (77 tests): event bus, orchestrator retry and escalation, fix map, monitor, API auth and reset, strict healing, LLM client parsing and retry, statistics, and the experiment harness. Run `python -m pytest -q` from `backend/`.
