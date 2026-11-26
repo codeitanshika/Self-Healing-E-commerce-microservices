@@ -39,6 +39,11 @@ class EventBus:
         # topic -> list of async handler functions
         self._subscribers: dict[str, list] = defaultdict(list)
 
+        # wildcard listeners receive EVERY event (used by the SSE stream
+        # that feeds the live dashboard). They are observers only: their
+        # failures are swallowed so they can never break the pipeline.
+        self._wildcard: list = []
+
         # keep a log of recent events for debugging + dashboard
         self._event_log: list[dict] = []
         self._max_log_size = 100    # keep last 100 events in memory
@@ -57,6 +62,14 @@ class EventBus:
         """
         self._subscribers[topic].append(handler)
         print(f"[EventBus] subscribed: {handler.__name__} → {topic}")
+
+    def subscribe_all(self, handler):
+        """Observe every topic. Handler must be async; errors are ignored."""
+        self._wildcard.append(handler)
+
+    def unsubscribe_all(self, handler):
+        if handler in self._wildcard:
+            self._wildcard.remove(handler)
 
     # ────────────────────────────────────────────────────────────
     # PUBLISH
@@ -79,6 +92,14 @@ class EventBus:
 
         # Print so you can see events firing in the terminal
         print(f"[EventBus] 📢 {topic} → {payload.get('service', '')}")
+
+        # Observers (e.g. live dashboard stream) see the event first and
+        # can never interfere with the real handlers.
+        for observer in list(self._wildcard):
+            try:
+                await observer(topic, payload)
+            except Exception as exc:  # pragma: no cover - defensive
+                print(f"[EventBus] observer error ignored: {exc}")
 
         # Get all handlers for this topic
         handlers = self._subscribers.get(topic, [])

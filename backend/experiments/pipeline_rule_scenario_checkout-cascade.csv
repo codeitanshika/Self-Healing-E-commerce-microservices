@@ -1,0 +1,16 @@
+scenario,concurrency,trial,service,fault_type,mode,detect_s,diagnose_s,fix_s,validate_s,mttr_s,result,retries,root_cause,diagnosis_correct
+checkout-cascade,3,1,auth,crash,rule,0.001,0.0,0.0,2.002,2.003,RECOVERED,0,service_crash,True
+checkout-cascade,3,1,cart,error,rule,,,0.0,2.023,2.024,RECOVERED,0,error_spike,True
+checkout-cascade,3,1,payment,error,rule,0.015,0.0,0.0,2.002,2.017,RECOVERED,0,error_spike,True
+checkout-cascade,3,2,auth,crash,rule,0.971,0.0,0.0,2.013,2.984,RECOVERED,0,service_crash,True
+checkout-cascade,3,2,cart,error,rule,0.981,0.0,0.0,2.011,2.992,RECOVERED,0,error_spike,True
+checkout-cascade,3,2,payment,error,rule,0.995,0.0,0.0,2.005,3.001,RECOVERED,0,error_spike,True
+checkout-cascade,3,3,auth,crash,rule,0.927,0.0,0.0,2.01,2.937,RECOVERED,0,service_crash,True
+checkout-cascade,3,3,cart,error,rule,0.933,0.0,0.0,2.007,2.94,RECOVERED,0,error_spike,True
+checkout-cascade,3,3,payment,error,rule,0.942,0.0,0.0,2.007,2.949,RECOVERED,0,error_spike,True
+checkout-cascade,3,4,auth,crash,rule,0.802,0.0,0.0,2.016,2.819,RECOVERED,0,service_crash,True
+checkout-cascade,3,4,cart,error,rule,0.824,0.0,0.0,2.004,2.829,RECOVERED,0,error_spike,True
+checkout-cascade,3,4,payment,error,rule,0.833,0.0,0.0,2.015,2.848,RECOVERED,0,error_spike,True
+checkout-cascade,3,5,auth,crash,rule,0.945,0.0,0.0,2.016,2.961,RECOVERED,0,service_crash,True
+checkout-cascade,3,5,cart,error,rule,0.962,0.0,0.0,2.003,2.966,RECOVERED,0,error_spike,True
+checkout-cascade,3,5,payment,error,rule,0.968,0.0,0.0,2.008,2.977,RECOVERED,0,error_spike,True

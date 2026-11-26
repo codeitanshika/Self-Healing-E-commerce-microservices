@@ -16,6 +16,7 @@ the "thinking" already happened in the Diagnosis Agent.
 import time
 from orchestrator.event_bus import bus
 from shared.events import FIX_REQUEST, FIX_APPLIED
+from shared.config import FIX_TYPES
 
 
 class FixAgent:
@@ -29,13 +30,7 @@ class FixAgent:
 
         # all 5 fix types this agent knows how to execute
         # (must match exactly what Diagnosis Agent's prompt promises)
-        self.valid_fixes = {
-            "restart",
-            "clear_memory",
-            "reduce_load",
-            "reroute_traffic",
-            "retry_with_backoff",
-        }
+        self.valid_fixes = set(FIX_TYPES)
 
         bus.subscribe(FIX_REQUEST, self.handle_fix_request)
         print("[FixAgent] initialized and subscribed")

@@ -17,6 +17,8 @@ import random
 import time
 from datetime import datetime
 
+from shared.config import EFFECTIVE_FIXES, strict_healing
+
 
 class SimulatedService:
     """
@@ -146,14 +148,22 @@ class SimulatedService:
         old_status = self.status
         old_fault = self.active_fault
 
-        # Reset all metrics to healthy values
-        self.status = "ok"
-        self.response_time_ms = random.randint(30, 80)
-        self.error_rate = 0.0
-        self.memory_percent = random.uniform(35.0, 55.0)
-        self.cpu_percent = random.uniform(10.0, 25.0)
-        self.active_fault = None
-        self.fault_injected_at = None
+        # Strict mode: a fix that does not address the active fault leaves
+        # the service exactly as broken as it was (see shared/config.py).
+        if old_fault and strict_healing() and fix_type not in EFFECTIVE_FIXES.get(old_fault, set()):
+            return {
+                "service":        self.name,
+                "fix_applied":    fix_type,
+                "old_status":     old_status,
+                "old_fault":      old_fault,
+                "new_status":     self.status,
+                "effective":      False,
+                "heal_count":     self.heal_count,
+                "message":        f"{fix_type} had no effect on {self.name}'s {old_fault} fault",
+                "timestamp":      time.time(),
+            }
+
+        self.reset()
         self.heal_count += 1
 
         return {
@@ -162,10 +172,29 @@ class SimulatedService:
             "old_status":     old_status,
             "old_fault":      old_fault,
             "new_status":     "ok",
+            "effective":      True,
             "heal_count":     self.heal_count,
             "message":        f"{self.name} healed via {fix_type}",
             "timestamp":      time.time(),
         }
+
+    # ────────────────────────────────────────────────────────────
+    # RESET
+    # ────────────────────────────────────────────────────────────
+
+    def reset(self):
+        """
+        Return to healthy whatever the fault is. This is the operator's
+        override (demo reset), not a remediation, so strict healing does
+        not apply and heal_count is not incremented.
+        """
+        self.status = "ok"
+        self.response_time_ms = random.randint(30, 80)
+        self.error_rate = 0.0
+        self.memory_percent = random.uniform(35.0, 55.0)
+        self.cpu_percent = random.uniform(10.0, 25.0)
+        self.active_fault = None
+        self.fault_injected_at = None
 
     # ────────────────────────────────────────────────────────────
     # PRIVATE: simulate natural traffic fluctuations

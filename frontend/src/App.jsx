@@ -1,119 +1,93 @@
-import { Container, Row, Col, Card, Button } from "react-bootstrap";
-import { useState } from "react";
-import { usePolling } from "./usePolling";
-import { HealthTiles } from "./components/HealthTiles";
-import { StatsCards } from "./components/StatsCards";
+import { lazy, Suspense, useCallback, useMemo, useState } from "react";
+import { usePolling, useEventStream } from "./lib/hooks";
+import { TopBar } from "./components/TopBar";
+import { KpiStrip } from "./components/KpiStrip";
+import { ServiceGrid } from "./components/ServiceGrid";
+import { PipelineBoard } from "./components/PipelineBoard";
+import { EventFeed } from "./components/EventFeed";
+import { FaultLab } from "./components/FaultLab";
 import { IncidentTable } from "./components/IncidentTable";
-import { MttrChart } from "./components/MttrChart";
+import { IncidentDrawer } from "./components/IncidentDrawer";
 
-const API_URL = import.meta.env.VITE_API_URL;
+// If the chunk fails to load (offline, or replaced by a newer deploy), keep the
+// rest of the console working instead of blanking the page.
+const Performance = lazy(() =>
+  import("./components/Performance").catch(() => ({
+    default: () => <div className="notice err">Charts could not load. Reload the page to retry.</div>,
+  })),
+);
 
-function App() {
-  const { data: servicesData } = usePolling("/api/services", 3000);
-  const { data: statsData } = usePolling("/api/stats", 4000);
-  const { data: incidentsData } = usePolling("/api/incidents", 4000);
-  const { data: chartData } = usePolling("/api/mttr-chart", 5000);
+export default function App() {
+  const { events, connected } = useEventStream();
 
-  const [selectedService, setSelectedService] = useState("payment");
-  const [selectedFault, setSelectedFault] = useState("crash");
+  // Whenever the stream reports a state change, refetch immediately instead
+  // of waiting for the next poll tick: the UI reacts in milliseconds.
+  const last = events[events.length - 1];
+  const bump = last?.seq ?? 0;
+  const settled = last && ["INCIDENT_LOGGED", "VALIDATION_RESULT"].includes(last.topic) ? bump : 0;
 
-  // nginx is a real Docker-managed container, not a simulated service —
-  // only "crash" (stopping the real container) has an honest equivalent
-  // for it. See backend/services/docker_service.py.
-  const faultOptions =
-    selectedService === "nginx"
-      ? ["crash"]
-      : ["crash", "slow", "memory", "error"];
+  const services = usePolling("/api/services", 3000, bump);
+  const history = usePolling("/api/history", 5000);
+  const active = usePolling("/api/active-incidents", 1500, bump);
+  const stats = usePolling("/api/stats", 5000, settled);
+  const incidents = usePolling("/api/incidents?limit=100", 6000, settled);
+  const mttr = usePolling("/api/mttr-chart", 8000, settled);
+  const revenue = usePolling("/api/revenue-series", 8000, settled);
+  const breakdown = usePolling("/api/breakdown", 8000, settled);
 
-  const handleServiceChange = (name) => {
-    setSelectedService(name);
-    if (name === "nginx") setSelectedFault("crash");
-  };
+  const [openId, setOpenId] = useState(null);
+  const close = useCallback(() => setOpenId(null), []);
+  const activeList = useMemo(() => active.data?.incidents ?? [], [active.data]);
 
-  const injectFault = async () => {
-    try {
-      await fetch(
-        `${API_URL}/api/services/${selectedService}/fault/${selectedFault}`,
-        { method: "POST" }
-      );
-    } catch (err) {
-      console.error("Failed to inject fault:", err);
-    }
-  };
+  const apiError = services.error && !services.data;
 
   return (
-    <div style={{ backgroundColor: "#0E0E10", minHeight: "100vh", paddingBottom: "2rem" }}>
-      <Container className="py-4">
+    <>
+      <TopBar connected={connected} apiError={apiError} summary={services.data?.summary} />
+      <main className="shell">
+        <KpiStrip stats={stats.data} />
 
-        <div className="mb-4">
-          <h1 style={{ color: "#F5F5F5", fontWeight: "bold" }}>
-            Self-Healing E-Commerce Monitor
-          </h1>
-          <p style={{ color: "#A0A0A5" }}>
-            Autonomous fault detection, diagnosis, and recovery using multi-agent AI
-          </p>
+        <div className="section">
+          <div className="section-head">
+            <h2 className="section-title">Service health</h2>
+            <span className="section-sub">Polled every 3 s · sparklines show recent response time</span>
+          </div>
+          <ServiceGrid servicesData={services.data} historyData={history.data} active={activeList} />
         </div>
 
-        <HealthTiles servicesData={servicesData} />
+        <div className="section grid cols-main">
+          <div className="grid" style={{ alignContent: "start" }}>
+            <PipelineBoard active={activeList} />
+            <EventFeed events={events} connected={connected} />
+          </div>
+          <FaultLab services={services.data} />
+        </div>
 
-        <StatsCards statsData={statsData} />
+        <div className="section">
+          <div className="section-head">
+            <h2 className="section-title">Performance</h2>
+            <span className="section-sub">Every chart has a table view</span>
+          </div>
+          <Suspense fallback={<div className="skeleton" style={{ height: 320 }} />}>
+            <Performance
+              mttr={mttr.data}
+              baseline={stats.data?.baseline_mttr_seconds ?? 900}
+              revenue={revenue.data}
+              incidents={incidents.data}
+              breakdown={breakdown.data}
+            />
+          </Suspense>
+        </div>
 
-        <Card className="shadow-sm mb-4" style={{ backgroundColor: "#1A1A1D", border: "none" }}>
-          <Card.Body>
-            <p style={{ color: "#F5F5F5", fontWeight: "bold", marginBottom: "1rem" }}>
-              Demo Controls
-            </p>
-            <div className="d-flex gap-3 align-items-end flex-wrap">
-              <div>
-                <label style={{ color: "#A0A0A5", fontSize: "0.85rem", display: "block", marginBottom: "4px" }}>
-                  Service
-                </label>
-                <select
-                  value={selectedService}
-                  onChange={(e) => handleServiceChange(e.target.value)}
-                  className="form-select"
-                  style={{ minWidth: "150px" }}
-                >
-                  <option value="auth">auth</option>
-                  <option value="cart">cart</option>
-                  <option value="payment">payment</option>
-                  <option value="inventory">inventory</option>
-                  <option value="notification">notification</option>
-                  <option value="nginx">nginx (real container)</option>
-                </select>
-              </div>
-              <div>
-                <label style={{ color: "#A0A0A5", fontSize: "0.85rem", display: "block", marginBottom: "4px" }}>
-                  Fault Type
-                </label>
-                <select
-                  value={selectedFault}
-                  onChange={(e) => setSelectedFault(e.target.value)}
-                  className="form-select"
-                  style={{ minWidth: "150px" }}
-                >
-                  {faultOptions.map((f) => (
-                    <option key={f} value={f}>{f}</option>
-                  ))}
-                </select>
-              </div>
-              <button
-                className="btn btn-danger"
-                onClick={injectFault}
-              >
-                Inject Fault
-              </button>
-            </div>
-          </Card.Body>
-        </Card>
+        <div className="section">
+          <IncidentTable incidentsData={incidents.data} onOpen={setOpenId} />
+        </div>
 
-        <IncidentTable incidentsData={incidentsData} />
-
-        <MttrChart chartData={chartData} />
-
-      </Container>
-    </div>
+        <p className="footer">
+          Event-driven multi-agent self-healing · LLM diagnosis · zero-cost, reproducible testbed
+        </p>
+      </main>
+      {openId != null && <IncidentDrawer id={openId} onClose={close} />}
+    </>
   );
 }
-
-export default App;

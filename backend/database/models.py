@@ -43,6 +43,20 @@ class Incident(SQLModel, table=True):
     timestamp: float                # unix time when incident was logged
 
 
+class IncidentStage(SQLModel, table=True):
+    """
+    One row per pipeline stage an incident passed through
+    (DETECTED -> DIAGNOSED -> FIX_APPLIED -> RETRY -> RECOVERED ...).
+    A separate table so existing incidents.db files keep working
+    without a column migration.
+    """
+    id: Optional[int] = Field(default=None, primary_key=True)
+    incident_db_id: int = Field(index=True)   # Incident.id
+    stage: str
+    ts: float
+    detail: str = ""
+
+
 def init_db():
     """
     Creates the incidents.db file and the Incident table

@@ -1,5 +1,7 @@
 # Retry Loop Verification — Test Report
 
+> Historical report: it describes the earlier policy, where both retries used the same fix (now `RETRY_POLICY=repeat`). By default each retry now uses a fix not yet tried. The bounded-retry and escalation behaviour is unchanged.
+
 ## Objective
 
 Verify that the Orchestrator's retry mechanism behaves correctly under

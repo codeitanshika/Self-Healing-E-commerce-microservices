@@ -54,7 +54,11 @@ FIX_MAP = {
     "cpu_overload":   {"primary": "reduce_load",        "retry": "restart"},
     "high_latency":   {"primary": "reroute_traffic",    "retry": "reduce_load"},
     "error_spike":    {"primary": "retry_with_backoff", "retry": "restart"},
-    "unknown":        {"primary": "restart",            "retry": "restart"},
+    # When the diagnosis itself failed we know nothing, so the two attempts
+    # must be DIFFERENT fixes covering the likely classes: restart (crash,
+    # memory, error) then reduce_load (slow). With restart->restart a failed
+    # diagnosis could never recover from an overload (first strategy run).
+    "unknown":        {"primary": "restart",            "retry": "reduce_load"},
 }
 
 # ── Revenue per second (illustrative, for dashboard metric) ─────
@@ -67,6 +71,56 @@ REVENUE_PER_SECOND = {
     "inventory":    4.0,    # ₹4/s — wrong stock data causes bad orders
     "notification": 1.0,    # ₹1/s — emails fail but orders still go through
 }
+
+# ── Fix effectiveness (strict healing mode) ──────────────────────
+# A fix only cures the faults listed here: an ineffective fix leaves the
+# service broken, so the Validation Agent reports STILL_BROKEN and the
+# Orchestrator's retry/escalation loop is exercised by genuinely wrong choices.
+# STRICT_HEALING=0 restores the old behaviour, where ANY fix cures ANY fault
+# (which makes recovery rate tautological).
+#
+#   crash  : only a restart revives a dead process
+#   memory : clearing memory, or restarting, frees the leak
+#   slow   : shedding or re-routing load; a restart just re-meets the same load
+#   error  : backoff/retry smooths a transient spike; a restart also clears it
+EFFECTIVE_FIXES = {
+    "crash":  {"restart"},
+    "memory": {"clear_memory", "restart"},
+    "slow":   {"reduce_load", "reroute_traffic"},
+    "error":  {"retry_with_backoff", "restart"},
+}
+
+
+def strict_healing() -> bool:
+    """On unless STRICT_HEALING=0. Read at call time so it can be toggled."""
+    return os.getenv("STRICT_HEALING", "1") != "0"
+
+
+# ── Retry policy ────────────────────────────────────────────────
+# Every fix the Fix Agent can execute, in the order used once a root cause's
+# own fixes from FIX_MAP have been tried.
+FIX_TYPES = ("restart", "reduce_load", "clear_memory", "retry_with_backoff", "reroute_traffic")
+
+
+def retry_policy() -> str:
+    """
+    "distinct" (default): every retry is a fix not yet tried on this incident.
+    "repeat": every retry is FIX_MAP[root_cause]["retry"], even if it already
+    failed. The published noise and strategy results were recorded this way.
+    """
+    return "repeat" if os.getenv("RETRY_POLICY", "distinct") == "repeat" else "distinct"
+
+
+def next_retry_fix(root_cause: str, tried: list[str]) -> str:
+    """The fix to apply after the ones in `tried` left the service broken."""
+    mapped = FIX_MAP.get(root_cause, FIX_MAP["unknown"])
+    if retry_policy() == "repeat":
+        return mapped["retry"]
+    # the Fix Agent runs an unrecognised fix name as a restart
+    done = {fix if fix in FIX_TYPES else "restart" for fix in tried}
+    candidates = (mapped["retry"], mapped["primary"], *FIX_TYPES)
+    return next((fix for fix in candidates if fix not in done), mapped["retry"])
+
 
 # ── Orchestrator settings ────────────────────────────────────────
 MAX_RETRIES = 2             # how many times to retry a failed fix

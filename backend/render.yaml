@@ -11,3 +11,7 @@ services:
         value: openai/gpt-oss-120b
       - key: ALLOWED_ORIGINS
         sync: false
+      # Set in the Render dashboard. Without it, fault injection and demo
+      # reset are open to anyone who finds the URL.
+      - key: API_KEY
+        sync: false

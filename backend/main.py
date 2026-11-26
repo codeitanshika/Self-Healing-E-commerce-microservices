@@ -32,9 +32,15 @@ sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 sys.stderr.reconfigure(encoding="utf-8", errors="replace")
 
 import asyncio
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Depends, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
 from services.service_manager import ServiceManager
+from shared.stream import hub
+from database import admin as db_admin
+from fault_injector.scenarios import SCENARIOS, list_scenarios, run_scenario, valid_steps
+from shared.config import MONITOR_POLL_INTERVAL
+from shared.security import require_api_key, rate_limit, get_api_key
 
 
 # ── Create the app ───────────────────────────────────────────────
@@ -58,7 +64,7 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=ALLOWED_ORIGINS,
     allow_methods=["*"],
-    allow_headers=["*"],
+    allow_headers=["*"],  # includes X-API-Key
 )
 
 # ── Create one shared ServiceManager ────────────────────────────
@@ -93,8 +99,11 @@ report_agent = ReportAgent(orchestrator.incident_cache)
 @app.on_event("startup")
 async def startup():
     """Runs once when FastAPI starts. Launches all background agents."""
+    hub.attach()
     asyncio.create_task(monitor.run())
     print("✅ Monitor Agent started as background task")
+    if not get_api_key():
+        print("⚠️  API_KEY not set — fault-injection endpoints are open (fine for local demos)")
 # ────────────────────────────────────────────────────────────────
 # ROOT
 # ────────────────────────────────────────────────────────────────
@@ -152,7 +161,8 @@ def get_service_metrics(name: str):
 # FAULT INJECTION ROUTES
 # ────────────────────────────────────────────────────────────────
 
-@app.post("/api/services/{name}/fault/{fault_type}")
+@app.post("/api/services/{name}/fault/{fault_type}",
+          dependencies=[Depends(require_api_key), Depends(rate_limit)])
 def inject_fault(name: str, fault_type: str):
     """
     Break a service on purpose.
@@ -167,7 +177,49 @@ def inject_fault(name: str, fault_type: str):
     return result
 
 
-@app.post("/api/services/{name}/heal")
+@app.post("/api/admin/reset",
+          dependencies=[Depends(require_api_key), Depends(rate_limit)])
+def reset_demo_data(confirm: bool = False):
+    """
+    Wipe incident history and return every service to healthy, so a demo
+    starts from a clean slate. Destructive, so it must be called with
+    ?confirm=true (the dashboard asks the user first).
+    """
+    if not confirm:
+        raise HTTPException(status_code=400, detail="Pass ?confirm=true to reset all data")
+    removed = db_admin.reset_all()
+    orchestrator.incident_cache.clear()
+    monitor.active_anomalies.clear()
+    monitor.history.clear()
+    healed = []
+    for name in list(manager.services):
+        if not manager.is_service_healthy(name):
+            manager.reset_service(name)
+            healed.append(name)
+    return {**removed, "services_healed": healed, "status": "reset"}
+
+
+@app.get("/api/scenarios")
+def get_scenarios():
+    """Scripted multi-fault / cascade scenarios the dashboard can launch."""
+    return {"scenarios": list_scenarios()}
+
+
+@app.post("/api/scenarios/{scenario_id}/run",
+          dependencies=[Depends(require_api_key), Depends(rate_limit)])
+async def start_scenario(scenario_id: str, background: BackgroundTasks):
+    """Launch a scenario; delayed (cascade) steps continue in the background."""
+    if scenario_id not in SCENARIOS:
+        raise HTTPException(status_code=404, detail=f"Unknown scenario '{scenario_id}'")
+    steps = valid_steps(manager, scenario_id)
+    if not steps:
+        raise HTTPException(status_code=409, detail="No service in this scenario is available")
+    background.add_task(run_scenario, manager, scenario_id)
+    return {"scenario": scenario_id, "steps": len(steps), "status": "started"}
+
+
+@app.post("/api/services/{name}/heal",
+          dependencies=[Depends(require_api_key), Depends(rate_limit)])
 def heal_service(name: str, fix_type: str = "restart"):
     """
     Manually heal a service (reset to healthy).
@@ -207,7 +259,10 @@ def get_unhealthy():
 # DASHBOARD DATA ROUTES (Phase 5)
 # ────────────────────────────────────────────────────────────────
 
-from database.queries import get_all_incidents, get_stats, get_mttr_by_fault_type
+from database.queries import (
+    get_all_incidents, get_stats, get_mttr_by_fault_type, get_incident_detail,
+    get_revenue_series, get_breakdown,
+)
 
 
 @app.get("/api/incidents")
@@ -226,6 +281,39 @@ def get_dashboard_stats():
 def get_mttr_chart():
     """Average MTTR grouped by root cause, for the bar chart."""
     return {"data": get_mttr_by_fault_type()}
+
+
+@app.get("/api/revenue-series")
+def revenue_series():
+    """Cumulative revenue protected, one point per incident."""
+    return {"data": get_revenue_series()}
+
+
+@app.get("/api/breakdown")
+def breakdown():
+    """Incident counts and mean MTTR by service, fix and outcome."""
+    return get_breakdown()
+
+
+@app.get("/api/history")
+def metrics_history():
+    """Rolling per-service metric samples (response time, errors, memory, CPU)."""
+    return {"history": monitor.get_history(), "poll_interval": MONITOR_POLL_INTERVAL}
+
+
+@app.get("/api/incidents/{incident_id}")
+def get_incident(incident_id: int):
+    """One incident plus its stage-by-stage timeline."""
+    detail = get_incident_detail(incident_id)
+    if detail is None:
+        raise HTTPException(status_code=404, detail="Incident not found")
+    return detail
+
+
+@app.get("/api/active-incidents")
+def get_active_incidents():
+    """Every in-progress incident with its live stage and timeline."""
+    return {"incidents": orchestrator.get_active_incidents()}
 
 
 @app.get("/api/active-incident")
@@ -250,3 +338,18 @@ def get_recent_events(limit: int = 20):
         "events": bus.get_recent_events(limit),
         "subscribers": bus.get_subscriber_count(),
     }
+
+
+@app.get("/api/stream")
+async def stream_events():
+    """
+    Server-Sent Events: every pipeline event (ANOMALY_DETECTED,
+    DIAGNOSIS_READY, FIX_APPLIED, ...) is pushed to the browser the
+    instant it is published on the bus. Replays the last few events on
+    connect so a freshly opened dashboard is never empty.
+    """
+    return StreamingResponse(
+        hub.listen(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )

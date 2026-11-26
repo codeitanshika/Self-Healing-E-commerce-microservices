@@ -1,0 +1,13 @@
+scenario,concurrency,trial,service,fault_type,mode,detect_s,diagnose_s,fix_s,validate_s,mttr_s,result,retries,root_cause,diagnosis_correct
+,,1,cart,crash,rule,0.008,0.0,0.0,2.006,2.014,RECOVERED,0,service_crash,True
+,,1,cart,slow,rule,0.762,0.0,0.0,2.018,2.78,RECOVERED,0,cpu_overload,True
+,,1,cart,memory,rule,0.79,0.0,0.0,2.009,2.799,RECOVERED,0,memory_leak,True
+,,1,cart,error,rule,0.871,0.0,0.0,2.012,2.883,RECOVERED,0,error_spike,True
+,,2,cart,crash,rule,0.942,0.0,0.002,2.002,2.946,RECOVERED,0,service_crash,True
+,,2,cart,slow,rule,0.885,0.001,0.001,2.014,2.901,RECOVERED,0,cpu_overload,True
+,,2,cart,memory,rule,0.957,0.0,0.0,2.019,2.976,RECOVERED,0,memory_leak,True
+,,2,cart,error,rule,0.801,0.0,0.0,2.002,2.804,RECOVERED,0,error_spike,True
+,,3,cart,crash,rule,0.941,0.0,0.0,2.019,2.96,RECOVERED,0,service_crash,True
+,,3,cart,slow,rule,0.997,0.0,0.0,2.008,3.005,RECOVERED,0,cpu_overload,True
+,,3,cart,memory,rule,0.868,0.0,0.0,2.019,2.888,RECOVERED,0,memory_leak,True
+,,3,cart,error,rule,0.785,0.0,0.0,2.014,2.799,RECOVERED,0,error_spike,True

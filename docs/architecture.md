@@ -119,7 +119,7 @@ Why this matters for the paper: it gives the system the decoupling and resilienc
 | error_spike | retry_with_backoff | restart |
 
 ## Retry Logic
-- Validation = STILL_BROKEN → Orchestrator picks the next fix in the priority list for that root_cause, re-dispatches Fix Agent.
+- Validation = STILL_BROKEN → Orchestrator picks a fix not yet tried on this incident (the table's retry fix first, then its primary, then any remaining fix) and re-dispatches the Fix Agent. `RETRY_POLICY=repeat` reuses the retry fix every time.
 - After 2 failed retries → mark incident `ESCALATED` (would notify a human in production).
 
 ## Revenue Calculation (illustrative metric for dashboard)
