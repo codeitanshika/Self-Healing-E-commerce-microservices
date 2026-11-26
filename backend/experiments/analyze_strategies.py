@@ -130,8 +130,8 @@ def render(res: dict) -> str:
           "measurement of a real Kubernetes cluster.",
           "- Open and closed loop are scored on the same incidents, and open/closed on the same diagnosis, so the "
           "comparisons are paired.",
-          "- Where an LLM's *diagnosis* is right but its own chosen *fix* is not effective (the paper's Section 6.1 "
-          "observation), the closed loop's retry is what recovers it; this table counts those cases.",
+          "- Where an LLM's *diagnosis* is right but its own chosen *fix* is not effective, the closed loop's retry "
+          "is what recovers it; this table counts those cases.",
           "- Validation wait is shortened to 0.5 s for these runs; it does not change which fixes are effective.", ""]
     return "\n".join(L)
 

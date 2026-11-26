@@ -1,7 +1,7 @@
 """
 run_experiments.py
 ==================
-Automated experiment runner for the research paper.
+Automated diagnosis benchmark runner.
 
 Runs 20 fault scenarios, REPEATS times each (to average out LLM
 variability), through BOTH:

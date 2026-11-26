@@ -57,7 +57,7 @@ class ReportAgent:
         # Orchestrator retries from — logging it here too would write
         # one extra DB row per retry for the same incident, inflating
         # total_incidents / recovery_rate / avg_mttr in the dashboard
-        # stats and the research paper's metrics.
+        # stats and the experiment metrics.
         if result == "STILL_BROKEN":
             return
 

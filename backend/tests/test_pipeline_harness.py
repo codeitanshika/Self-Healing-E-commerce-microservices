@@ -15,7 +15,9 @@ def test_end_to_end_pipeline_on_simulated_service(monkeypatch):
     for r in rows:
         assert r["result"] == "RECOVERED"
         assert r["diagnosis_correct"] is True
-        assert float(r["mttr_s"]) >= float(r["detect_s"]) > 0
+        # a fault injected just before a poll is detected in under 0.5 ms, recorded as 0.0
+        assert float(r["mttr_s"]) >= float(r["detect_s"]) >= 0
+        assert float(r["mttr_s"]) > 0
         assert r["retries"] == 0
     s = rp.summarize(rows)
     assert s["recovery_rate"] == 1.0 and s["first_try"] == 1.0 and s["mean_mttr"] > 0

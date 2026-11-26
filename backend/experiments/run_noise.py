@@ -3,7 +3,7 @@ run_noise.py
 ============
 Does verify-and-retry actually earn its keep?
 
-The paper's central architectural claim is that *verifying* a fix (and
+The project's central architectural claim is that *verifying* a fix (and
 retrying a different one) is what separates this system from "diagnose and
 hope". Until STRICT_HEALING existed that claim was untestable, because every
 fix cured every fault. This experiment tests it directly:

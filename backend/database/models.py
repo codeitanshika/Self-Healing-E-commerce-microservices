@@ -6,7 +6,7 @@ Defines the Incident table using SQLModel.
 Each row = one fault that was detected, diagnosed, fixed, and validated.
 This table is the source of truth for:
 - The dashboard's incident history table
-- All research paper metrics (MTTR, accuracy, revenue protected)
+- The reported metrics (MTTR, accuracy, revenue protected)
 """
 
 from sqlmodel import SQLModel, Field, create_engine

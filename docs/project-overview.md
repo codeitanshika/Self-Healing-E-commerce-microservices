@@ -37,10 +37,10 @@ Can a multi-agent, LLM-orchestrated system autonomously detect, diagnose, and re
 Listens for anomalies, sequences agent calls via the event bus, manages the retry loop (max 2 retries → ESCALATED).
 
 ## Control Plane
-A self-built async publish/subscribe **event bus** (~40 lines), replacing Solace Agent Mesh — zero cost, fully understood, and a research contribution in its own right.
+A self-built async publish/subscribe **event bus** (a short module), replacing Solace Agent Mesh — zero cost, fully understood, and a research contribution in its own right.
 
 ## Dashboard
-React + Vite app: live service health tiles (green/yellow/red), incident history table, MTTR-per-fault-type chart, total revenue protected vs 15-min manual baseline, sidebar fault-injection controls.
+React + Vite app: key figures, live service cards, healing pipeline, event-bus feed, fault lab, charts and incident history with a detail panel.
 
 ## Demo Moment
 Inject a fault into Payment → walk away → within ~60s the dashboard shows the full detect→diagnose→fix→validate→log cycle with MTTR and revenue protected.
@@ -49,13 +49,13 @@ Inject a fault into Payment → walk away → within ~60s the dashboard shows th
 A lightweight, event-driven, LLM-diagnosed *closed-loop* (with retry + verification) self-healing system for microservices, runnable on commodity hardware at zero API cost, evaluated on a reproducible testbed against a manual-response baseline.
 
 ## Tech Stack
-React + Vite + Tailwind + Recharts (frontend) · FastAPI (backend) · Groq/open-weight LLMs (free — model pinned via `GROQ_MODEL` env var, since Groq periodically retires model IDs, see docs/paper.md §6.2) · custom async event bus · SQLite/SQLModel · Render + Vercel (free deploy).
+React + Vite + Recharts (frontend) · FastAPI (backend) · Groq/open-weight LLMs (free — model pinned via `GROQ_MODEL` env var, since Groq periodically retires model IDs) · custom async event bus · SQLite/SQLModel · Render + Vercel (free deploy).
 
 ## Team Roles (optional — plan also works solo)
 - Person A: Services + Fix agent
 - Person B: Fault injector + Validation agent
 - Person C: Monitor + Diagnosis agent + event-bus wiring
-- Person D: React dashboard + Report agent + research paper
+- Person D: React dashboard + Report agent + experiments
 
 ## Approach
 Self-paced, 6 phases (see `build-plan.md`). Each phase ends with something runnable and a git commit. Solo or team — same phases.

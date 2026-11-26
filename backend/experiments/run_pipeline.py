@@ -177,7 +177,7 @@ async def run_scenario_experiment(manager, scenario_id: str, trials: int, mode: 
                                    poll: float = 1.0, timeout: float = 120.0):
     """
     Fire a multi-fault scenario and time every incident it creates. Rows carry
-    `concurrency` (how many incidents the scenario opened) so the paper can show
+    `concurrency` (how many incidents the scenario opened) so the analysis can show
     how MTTR scales when many things fail at once.
     """
     from fault_injector.scenarios import run_scenario, valid_steps

@@ -136,9 +136,10 @@ def render(res: dict, poll: float = 1.0) -> str:
               "simulated figure."]
     L += ["", f"All incidents recovered: **{res['all_recovered']}**; maximum retries used: **{res['max_retries']}**.",
           "", "## Caveat", "",
-          "The simulated services always heal when asked, so first-try success is 100% by construction. "
-          "Retry/escalation behaviour is covered by the forced-failure test in `retry-loop-test.md`, and the "
-          "real Nginx container (see `run_pipeline.py --service nginx`) is where a genuinely failing fix can occur.", ""]
+          "These runs used any-fix-heals (`STRICT_HEALING=0`, the runner's default), so first-try success on the "
+          "simulated services is 100% by construction; the application itself now defaults to strict healing. "
+          "Retry and escalation are measured in `verification-under-noise.md` and `strategy-comparison.md`; the "
+          "real Nginx container (see `run_pipeline.py --service nginx`) is where a real fix can fail.", ""]
     return "\n".join(L)
 
 

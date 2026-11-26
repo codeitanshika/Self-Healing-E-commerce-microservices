@@ -10,7 +10,7 @@ dist/
 .idea/
 .DS_Store
 
-# Unpublished research paper draft — keep out of the (potentially public) repo
-# until it's actually published. See docs/research-paper.md for the outline
-# instead, which is safe to keep public.
+# Unpublished drafts: keep out of the public repo
 docs/paper.md
+docs/paper/
+docs/research-paper.md

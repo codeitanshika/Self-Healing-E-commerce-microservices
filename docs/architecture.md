@@ -1,114 +1,113 @@
 # Architecture
 
-> This supersedes the earlier SAM-based draft. The event-driven design is **identical**; only the transport changed (our own in-process event bus instead of Solace), and the LLM is Groq (free) instead of Anthropic (paid).
+An event-driven control plane: five agents and an orchestrator exchange events over an in-process asynchronous bus. The LLM (Groq, free tier) is used by one agent only, for diagnosis.
 
-## High-Level Flow
+## High-level flow
 
 ```
-[5 Simulated Services] --metrics--> [Monitor Agent]
-                                         |
-                                   ANOMALY_DETECTED
-                                         v
-                                  [Orchestrator]
-                                         |
-                                         v
-                                 [Diagnosis Agent] --(Groq / gpt-oss-120b)
-                                         |
-                                  DIAGNOSIS_READY
-                                         v
-                                    [Fix Agent]
-                                         |
-                                    FIX_APPLIED
-                                         v
-                               [Validation Agent]
-                                    /        \
-                            RECOVERED      STILL_BROKEN
-                                |               |
-                                v               v
-                          [Report Agent]   [Orchestrator: retry
-                                            with next fix,
-                                            max 2 retries -> ESCALATED]
-                                |
-                                v
-                           [SQLite DB]
-                                |
-                                v
-                       [React Dashboard]  (reads via REST, polls every 3-5s)
+ [5 simulated services + optional real Nginx]
+        ^ polls            ^ repairs         ^ rechecks
+        |                  |                 |
+   [Monitor] ──ANOMALY_DETECTED──> [Orchestrator]
+                                        |  DIAGNOSE_REQUEST
+                                        v
+                                   [Diagnosis] ── Groq LLM
+                                        |  DIAGNOSIS_READY
+                                        v
+                                   [Orchestrator] ──FIX_REQUEST──> [Fix]
+                                        ^                            | FIX_APPLIED
+                                        |                            v
+                                        |                       [Orchestrator]
+                                        |                            | VALIDATE_REQUEST
+                                        |                            v
+                                        └──── VALIDATION_RESULT ─ [Validation]
+                                              STILL_BROKEN: next fix, at most 2 retries
+                                              RECOVERED / ESCALATED
+                                                     v
+                                                 [Report] ──> SQLite ──> REST + SSE ──> React dashboard
 ```
 
-All arrows between agents are **events published/subscribed via our own in-process async event bus** (`orchestrator/event_bus.py`). Agents never call each other directly — they only know event topics.
+Agents never call each other. They publish and subscribe to named events (`orchestrator/event_bus.py`). One piece of state is shared: the Orchestrator's `incident_cache`, which the Report Agent reads to assemble the stored row.
 
-## Communication Plane (Event Topics)
+## Event topics
 
-| Event Topic | Published By | Subscribed By | Payload |
+Topic names are constants in `shared/events.py`.
+
+| Topic | Published by | Subscribed by | Payload |
 |---|---|---|---|
-| `ANOMALY_DETECTED` | Monitor Agent | Orchestrator | service, fault_type, metrics, timestamp |
-| `DIAGNOSE_REQUEST` | Orchestrator | Diagnosis Agent | service, metrics |
-| `DIAGNOSIS_READY` | Diagnosis Agent | Orchestrator | root_cause, confidence, fix, business_impact, explanation |
-| `FIX_REQUEST` | Orchestrator | Fix Agent | service, fix |
-| `FIX_APPLIED` | Fix Agent | Orchestrator | service, fix_applied, fix_time |
-| `VALIDATE_REQUEST` | Orchestrator | Validation Agent | service, detected_at |
-| `VALIDATION_RESULT` | Validation Agent | Orchestrator, Report Agent | result (RECOVERED/STILL_BROKEN), mttr |
-| `INCIDENT_LOGGED` | Report Agent | (Dashboard reads DB via REST) | — |
+| `ANOMALY_DETECTED` | Monitor | Orchestrator | service, fault_type, metrics, timestamp |
+| `DIAGNOSE_REQUEST` | Orchestrator | Diagnosis | service, metrics, incident_id |
+| `DIAGNOSIS_READY` | Diagnosis | Orchestrator | service, incident_id, root_cause, confidence, fix, business_impact, explanation |
+| `FIX_REQUEST` | Orchestrator | Fix | service, fix, incident_id |
+| `FIX_APPLIED` | Fix | Orchestrator | service, incident_id, fix_applied, fix_time, success |
+| `VALIDATE_REQUEST` | Orchestrator | Validation | service, incident_id, detected_at |
+| `VALIDATION_RESULT` | Validation (`ESCALATED`: Orchestrator) | Orchestrator, Report | service, incident_id, result, mttr_seconds |
+| `INCIDENT_LOGGED` | Report | none (observed by the live stream) | incident_db_id, service, result, mttr_seconds |
 
-## The Event Bus (our SAM replacement)
+## The event bus
 
-A minimal async publish/subscribe layer. Conceptually:
+The core of `publish`:
 
 ```python
-# orchestrator/event_bus.py
-import asyncio
-from collections import defaultdict
-
-class EventBus:
-    def __init__(self):
-        self._subscribers = defaultdict(list)   # topic -> [async fn]
-
-    def subscribe(self, topic: str, handler):
-        self._subscribers[topic].append(handler)
-
-    async def publish(self, topic: str, payload: dict):
-        # notify all handlers for this topic concurrently
-        await asyncio.gather(*[h(payload) for h in self._subscribers[topic]])
-
-bus = EventBus()   # single shared instance imported by all agents
+async def publish(self, topic: str, payload: dict):
+    for observer in list(self._wildcard):      # live-stream observers
+        try:
+            await observer(topic, payload)
+        except Exception as exc:
+            print(f"[EventBus] observer error ignored: {exc}")
+    handlers = self._subscribers.get(topic, [])
+    await asyncio.gather(*[handler(payload) for handler in handlers])
 ```
 
-Why this matters for the paper: it gives the system the decoupling and resilience properties of event-driven architecture (independent components, easy to add/remove agents) without any external broker or cost.
+Wildcard observers see every event and cannot break the pipeline. The bus runs in one process and has no persistence or delivery guarantees, so it is not a substitute for a message broker at scale.
 
 ## Layers
 
-### 1. Service Layer (Data/Execution Plane)
-- 5 simulated services managed inside one FastAPI app, logical ports/names: auth(8001), cart(8002), payment(8003), inventory(8004), notification(8005).
-- Each exposes the contract: `GET /health`, `POST /fault/{mode}`.
-- Fault modes: `none`, `crash`, `slow`, `memory`, `error`.
+### 1. Service layer
+- Five simulated services in one FastAPI app: auth, cart, payment, inventory, notification. Each is a Python object (`services/simulated_service.py`) with `get_health`, `inject_fault` and `heal`.
+- If a Docker daemon answers at startup, a real Nginx container joins as a sixth service with the same interface (`services/docker_service.py`). It supports the `crash` fault only, and every fix restarts the container.
+- Fault types: `crash`, `slow`, `memory`, `error`.
 
-> Solo/simple structure (chosen): services are Python objects inside the single FastAPI app, addressed by name, not 5 separate servers. The endpoint contract is still honored via routes like `/api/services/{name}/health`. This keeps it runnable with one command and easy to deploy on one free host.
+### 2. Telemetry layer
+- The Monitor polls every service every 5 s (`MONITOR_POLL_INTERVAL`) and keeps the last 120 samples per service.
+- Anomaly rules, checked in this order: status is `down`; response time over 2000 ms; error rate over 0.3; memory over 85%.
 
-### 2. Telemetry Layer
-- Monitor Agent polls each service's health every 5s.
-- Extracts: cpu%, memory%, response_time_ms, error_rate, status.
-- Threshold rules flag anomalies (latency>2000ms, error_rate>0.3, memory>85%, status==down).
+### 3. Control layer
+- The Orchestrator tracks each incident's stage and timeline, picks retry fixes and escalates.
+- Incidents found in the same poll are handled concurrently.
 
-### 3. Agent / Orchestration Layer (Control Plane)
-- Built on our own event bus.
-- Orchestrator = central coordinator with retry logic.
-- Each agent = an async task subscribing to its topics.
+### 4. Intelligence layer
+- The Diagnosis Agent calls Groq (`openai/gpt-oss-120b` by default, set with `GROQ_MODEL`) with a structured prompt and expects JSON: `root_cause`, `confidence`, `fix`, `business_impact`, `explanation`.
+- A failed call or unparseable reply is retried once, then replaced by a safe default (`unknown`, `restart`).
+- `agents/rule_based_diagnosis.py` is the rule-based comparison used by the experiments.
 
-### 4. Intelligence Layer
-- Diagnosis Agent calls **Groq (default: `openai/gpt-oss-120b`, configurable via `GROQ_MODEL`)** with a structured prompt.
-- Returns JSON: root_cause, confidence, fix, business_impact, explanation.
+### 5. Persistence layer
+SQLite through SQLModel. Only the Report Agent inserts rows. The dashboard reads them, and the demo reset deletes them.
 
-### 5. Persistence Layer
-- SQLite via SQLModel.
-- Table `Incident`: id, service, root_cause, business_impact, fix_applied, result, mttr_seconds, revenue_protected, timestamp.
+| Table | Columns |
+|---|---|
+| `Incident` | id, service, fault_type, root_cause, confidence, business_impact, explanation, fix_applied, retry_count, result, mttr_seconds, revenue_protected, timestamp |
+| `IncidentStage` | id, incident_db_id, stage, ts, detail |
 
-### 6. Presentation Layer
-- React + Vite dashboard.
-- Live health tiles (polls `GET /api/services`).
-- Reads incidents/stats via REST for history, MTTR chart, revenue totals.
+### 6. Presentation layer
+- React + Vite dashboard: key figures, service cards, healing pipeline, event feed, fault lab, charts, incident table and detail panel.
+- Data arrives by polling the REST API, plus Server-Sent Events from `/api/stream` for the feed and immediate refreshes.
 
-## Fault → Fix Mapping (used by Fix Agent)
+### Access control
+If `API_KEY` is set, the fault, scenario, heal and reset endpoints require an `X-API-Key` header. Those endpoints are rate limited per IP. There are no user accounts, and read endpoints are open.
+
+## Faults and fixes
+
+Under strict healing (the default), a fix cures a fault only if it is listed here (`EFFECTIVE_FIXES`). `STRICT_HEALING=0` lets any fix cure any fault.
+
+| Fault | Effective fixes |
+|---|---|
+| crash | restart |
+| memory | clear_memory, restart |
+| slow | reduce_load, reroute_traffic |
+| error | retry_with_backoff, restart |
+
+The first fix is the one the diagnosis returns. `FIX_MAP` supplies the retry order:
 
 | root_cause | primary fix | retry fix |
 |---|---|---|
@@ -117,13 +116,19 @@ Why this matters for the paper: it gives the system the decoupling and resilienc
 | cpu_overload | reduce_load | restart |
 | high_latency | reroute_traffic | reduce_load |
 | error_spike | retry_with_backoff | restart |
+| unknown | restart | reduce_load |
 
-## Retry Logic
-- Validation = STILL_BROKEN → Orchestrator picks a fix not yet tried on this incident (the table's retry fix first, then its primary, then any remaining fix) and re-dispatches the Fix Agent. `RETRY_POLICY=repeat` reuses the retry fix every time.
-- After 2 failed retries → mark incident `ESCALATED` (would notify a human in production).
+## Retry logic
+- On `STILL_BROKEN` the Orchestrator picks a fix not yet tried on this incident: the table's retry fix first, then its primary, then any remaining fix. `RETRY_POLICY=repeat` reuses the retry fix every time.
+- After 2 failed retries the incident is marked `ESCALATED`. No notification is sent.
 
-## Revenue Calculation (illustrative metric for dashboard)
+## Revenue figure (illustrative)
 ```
-revenue_protected = max(0, MANUAL_BASELINE_SECONDS - actual_mttr_seconds) * revenue_per_second[service]
+revenue_protected = max(0, 900 - mttr_seconds) * revenue_per_second[service]    (recovered incidents only)
 ```
-Default `MANUAL_BASELINE_SECONDS = 900` (15 min). `revenue_per_second` is a configurable per-service constant (illustrative, not real data — state this clearly in the paper).
+900 s is the assumed manual response time (`MANUAL_BASELINE_SECONDS`). The per-service rates are made-up constants.
+
+## Known limitations
+- The Monitor waits for the current batch of incidents to finish before polling again, so a fault that appears during healing is detected late.
+- A reply that is valid JSON but lacks an expected field is not caught, and that incident stays open.
+- Open incidents and metric history are held in memory and lost on restart.

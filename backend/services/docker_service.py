@@ -15,11 +15,9 @@ the container itself:
 - status/cpu/memory come from `docker inspect` / `docker stats`
 - response_time_ms/error_rate come from an actual HTTP request to the
   container's published port
-- heal() issues a real `docker restart` — the first fix in this
-  system that can genuinely fail, unlike SimulatedService.heal(),
-  which always succeeds by construction (see the project's paper,
-  Limitations §11, on why that's a real gap this class addresses
-  for exactly one service).
+- heal() issues a real `docker restart`, which can genuinely fail.
+  A SimulatedService's outcome instead follows a fixed table
+  (EFFECTIVE_FIXES), so this class covers that gap for one service.
 
 Only the "crash" fault type has a real-world equivalent here
 (stopping the real container). Other fault types are rejected rather
@@ -129,7 +127,7 @@ class DockerService:
             # the "running but unhealthy" case that's distinct from a
             # crash. Maps onto the existing error_rate > 0.3 anomaly
             # rule (error_spike), since the current fault taxonomy
-            # (paper Table IV) has no dedicated "unhealthy" root cause.
+            # has no dedicated "unhealthy" root cause.
             return self._health_dict(
                 status="degraded", cpu=0.0, memory=0.0,
                 response_time_ms=response_time_ms, error_rate=1.0,
@@ -203,12 +201,12 @@ class DockerService:
         Unlike SimulatedService.heal(), this can genuinely fail: a
         real `docker restart` has no guarantee of success. fix_type
         is accepted for interface parity with the rest of the system
-        (Table III's fault-to-fix map still names it when this
-        service's incidents are diagnosed), but the only real action
-        currently implemented is a container restart regardless of
-        which fix label was chosen — mapping different fix labels to
-        differentiated real Docker actions is future work, not yet
-        built for this one service.
+        (the fault-to-fix map still names it when this service's
+        incidents are diagnosed), but the only real action currently
+        implemented is a container restart regardless of which fix label
+        was chosen — mapping different fix labels to differentiated real
+        Docker actions is future work, not yet built for this one
+        service.
         """
         container = self._get_container()
         if container is None:

@@ -33,7 +33,7 @@ Say you click **Inject crash into payment**.
 | 1 | The service object flips to `status="down"`, 100% errors. | `SimulatedService.inject_fault`, `backend/services/simulated_service.py` |
 | 2 | The Monitor wakes up on its timer (default 5 s), reads every service's health and compares it with the thresholds. It sees a crash and publishes `ANOMALY_DETECTED`. It remembers the service, so it does not report the same fault again. | `MonitorAgent._check_all_services`, `_detect_anomaly`, `_publish_anomaly` in `agents/monitor_agent.py`; thresholds in `shared/config.py` (`THRESHOLDS`) |
 | 3 | The Orchestrator creates an incident record (id, timestamp, stage `diagnosing`) and publishes `DIAGNOSE_REQUEST`. | `Orchestrator.on_anomaly_detected`, `orchestrator/orchestrator.py` |
-| 4 | The Diagnosis Agent builds a prompt (metrics, decision priority, allowed answers) and calls Groq. The reply is parsed as JSON: `root_cause`, `confidence`, `fix`, `explanation`, `business_impact`. A truncated or broken reply is retried once, then falls back to a safe default (`unknown` -> restart). It publishes `DIAGNOSIS_READY`. | `DiagnosisAgent._build_prompt` in `agents/diagnosis_agent.py`; `ask_llm`, `parse_json_object` in `shared/llm.py` |
+| 4 | The Diagnosis Agent builds a prompt (metrics, decision priority, allowed answers) and calls Groq. The reply is parsed as JSON: `root_cause`, `confidence`, `fix`, `explanation`, `business_impact`. A truncated or broken reply is retried once, then falls back to a safe default (`unknown` -> restart). Valid JSON with a missing field is not yet handled. It publishes `DIAGNOSIS_READY`. | `DiagnosisAgent._build_prompt` in `agents/diagnosis_agent.py`; `ask_llm`, `parse_json_object` in `shared/llm.py` |
 | 5 | The Orchestrator stores the diagnosis and publishes `FIX_REQUEST`. | `Orchestrator.on_diagnosis_ready` |
 | 6 | The Fix Agent calls `heal()` on the service. | `FixAgent.apply_fix`, `agents/fix_agent.py` -> `SimulatedService.heal` |
 | 7 | The Orchestrator asks for validation. The Validation Agent waits 2 s, then re-reads the **real** health. It never trusts the fix. | `ValidationAgent.validate`, `agents/validation_agent.py` |
@@ -44,7 +44,7 @@ Say you click **Inject crash into payment**.
 
 ## 3. The pieces
 
-**Event bus** (`orchestrator/event_bus.py`). About 100 lines: a dict of topic -> handlers. `publish` calls every handler concurrently. `subscribe_all` lets *observers* (the live stream) watch every event without being able to break the pipeline. Topic names are constants in `shared/events.py`.
+**Event bus** (`orchestrator/event_bus.py`). A short module: a dict of topic -> handlers. `publish` calls every handler concurrently. `subscribe_all` lets *observers* (the live stream) watch every event without being able to break the pipeline. Topic names are constants in `shared/events.py`.
 
 **Simulated services** (`services/`). Each one is an object with response time, error rate, memory and CPU, plus `get_health`, `inject_fault` and `heal`. `ServiceManager` holds them all. If Docker is running, a real Nginx container (`docker_service.py`, `docker-compose.yml`) joins as a sixth service with the same interface, so no agent knows the difference.
 
@@ -69,7 +69,7 @@ Say you click **Inject crash into payment**.
 
 ## 5. The dashboard (`frontend/src`)
 
-`App.jsx` wires everything. `lib/hooks.js` has `usePolling` (fetch on an interval, and immediately when the stream reports an event) and `useEventStream` (Server-Sent Events). Components: `KpiStrip`, `ServiceGrid`, `PipelineBoard`, `EventFeed`, `FaultLab`, `Charts`, `IncidentTable`, `IncidentDrawer`. All styling is in `index.css`.
+`App.jsx` wires everything. `lib/hooks.js` has `usePolling` (fetch on an interval, and immediately when the stream reports an event) and `useEventStream` (Server-Sent Events). Components: `TopBar`, `KpiStrip`, `ServiceGrid`, `PipelineBoard`, `EventFeed`, `FaultLab`, `Performance` (loads `Charts`), `IncidentTable`, `IncidentDrawer`. All styling is in `index.css`.
 
 ## 6. How the research claims are tested (`backend/experiments/`)
 
@@ -79,6 +79,7 @@ Say you click **Inject crash into payment**.
 | Where does recovery time go? Does concurrency slow it? | `run_pipeline.py`, `analyze_pipeline.py` | `pipeline-latency.md` |
 | Does verify-and-retry help when diagnosis is wrong? | `run_noise.py`, `analyze_noise.py` | `verification-under-noise.md` |
 | Closed loop vs blind restart vs open loop, with real LLMs | `run_strategies.py`, `analyze_strategies.py` | `strategy-comparison.md` |
+| Does the strategy result depend on the fix table? | `sensitivity.py` | `sensitivity.md` |
 | Figures | `make_figures.py` (+ the analyze scripts) | `docs/results/figures/` |
 
 ## 7. Tests
