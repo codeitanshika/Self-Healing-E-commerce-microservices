@@ -1,51 +1,58 @@
 # UI Tokens — Dashboard Design
 
-> Your original color/typography system is kept as-is (it's good). Only the framework mapping changed from Streamlit to React + Tailwind + Recharts. Put these colors in your Tailwind theme.
+The dashboard uses a dark "operations console" theme written in plain CSS. Tokens are CSS variables on `:root` in [`frontend/src/index.css`](../frontend/src/index.css), which is the source of truth.
 
-## Color Tokens
-| Token | Hex | Usage |
+## Surfaces and text
+| Token | Value | Use |
 |---|---|---|
-| `status-healthy` | #1D9E75 | Service tile when healthy |
-| `status-degraded` | #BA7517 | Service tile when degraded (slow/high CPU) |
-| `status-down` | #E24B4A | Service tile when crashed |
-| `bg-primary` | #0E0E10 | Dashboard background |
-| `bg-card` | #1A1A1D | Card/tile background |
-| `text-primary` | #F5F5F5 | Main text |
-| `text-secondary` | #A0A0A5 | Labels, captions |
-| `accent` | #534AB7 | Highlights, active retry indicator |
+| `--bg` | `#0a0b0e` | Page background |
+| `--bg-elevated` | `#101217` | Drawer, card gradient end |
+| `--surface` | `#14171d` | Cards |
+| `--surface-2` | `#1a1e26` | Inputs, tracks, hover |
+| `--border` | `#242933` | Card borders, grid lines |
+| `--border-strong` | `#323946` | Controls |
+| `--text` | `#eceef2` | Main text |
+| `--text-2` | `#a4abb8` | Secondary text |
+| `--text-3` | `#6f7787` | Labels, captions, axes |
 
-Tailwind theme example (`tailwind.config.js`):
-```js
-theme: { extend: { colors: {
-  healthy: "#1D9E75", degraded: "#BA7517", down: "#E24B4A",
-  bgPrimary: "#0E0E10", bgCard: "#1A1A1D",
-  textPrimary: "#F5F5F5", textSecondary: "#A0A0A5", accent: "#534AB7",
-}}}
-```
+## Status colours
+Reserved for state. Each has a tinted background variant (`--ok-bg` and so on).
 
-## Typography
-- Headers: a clean sans (Inter or system UI) — bold, larger scale.
-- Metrics: large numeric weight for MTTR / revenue / counts.
-- Body/labels: regular weight, `text-secondary` color.
+| Token | Value | Meaning |
+|---|---|---|
+| `--ok` | `#2fbf8f` | Healthy, recovered |
+| `--warn` | `#e0a030` | Degraded, retry |
+| `--down` | `#ec5b5b` | Down, escalated, destructive action |
+| `--info` | `#5b9dff` | Selection, validation messages |
+| `--accent` | `#8a7dff` | Agents at work, diagnosis, confidence |
 
-## Layout Tokens
-- Service tiles: a 5-column responsive grid (`grid grid-cols-2 md:grid-cols-5 gap-4`).
-- Section spacing: a divider or generous vertical gap between sections.
-- Refresh interval: 3–5 seconds (polling hook).
+## Chart series
+Fixed order: `--series-1` `#3987e5`, `--series-2` `#d95926`, `--series-3` `#199e70`, `--series-4` `#c98500`, `--series-5` `#d55181`.
 
-## Status Tile Spec
-Each of the 5 tiles shows:
-- Service name (bold)
-- Status text: HEALTHY / DEGRADED / DOWN
-- Sub-metric: "CPU X% | Mem Y%"
-- Background color per `status-*` tokens.
+`ServiceGrid.jsx` (sparklines) and `Charts.jsx` repeat some of these values as literal hex strings. Change both places together.
 
-## Incident Table Columns (display order)
-1. Timestamp 2. Service 3. Root Cause 4. Fix Applied 5. Result (RECOVERED/STILL_BROKEN/ESCALATED) 6. MTTR (s) 7. Revenue Protected (₹)
+## Type and shape
+| Token | Value |
+|---|---|
+| `--sans` | Inter, then the system UI font |
+| `--mono` | JetBrains Mono, then the system monospace font |
+| `--radius` / `--radius-sm` | `14px` / `9px` |
+| Base size | `14px`, line height 1.5 |
 
-## Charts (Recharts)
-- **MTTR by fault type:** bar chart, one bar per root_cause, with a dashed `ReferenceLine` at y=900 labeled "Manual baseline (15 min)".
-- **Revenue protected over time:** cumulative line chart (x = incident number, y = cumulative ₹).
+Numbers that update live use the `.num` class (tabular figures) so they do not shift.
 
-## Icons (emoji is fine)
-- Healthy 🟢 · Degraded 🟡 · Down 🔴 · Retry in progress 🔄
+## Layout
+| Element | Rule |
+|---|---|
+| Page width | 1320px maximum |
+| Key figures | 1 wide card + 4; two columns below 1100px |
+| Service cards | `repeat(auto-fill, minmax(205px, 1fr))`; two columns below 640px, one below 380px |
+| Pipeline and fault lab | two columns; stacked below 980px |
+| Detail drawer | `min(480px, 100vw)` |
+
+## Meter thresholds
+| Meter | Amber at | Red at |
+|---|---|---|
+| CPU | 70% | 85% |
+| Memory | 70% | 85% |
+| Error rate | 15% | 30% |

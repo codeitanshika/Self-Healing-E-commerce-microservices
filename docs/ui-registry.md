@@ -1,82 +1,46 @@
-# UI Registry — Dashboard Components (React)
+# UI Registry — Dashboard Components
 
-Maps each dashboard element to its React component and data source. Replaces the Streamlit registry.
+Where each part of the dashboard lives (`frontend/src/`) and where its data comes from. `App.jsx` fetches the data and passes it down.
 
-| Component | React component | Data source (backend REST) | Refresh |
+| Part | Component | Data source | Poll interval |
 |---|---|---|---|
-| Page title | `<Header/>` | static | — |
-| Service health tile (×5) | `<HealthTile/>` in a grid | `GET /api/services` | 4s poll |
-| Summary metrics row | `<MetricCard/>` ×4 | `GET /api/stats` | 4s poll |
-| Active incident banner | `<ActiveIncidentBanner/>` | `GET /api/active-incident` | 4s poll |
-| Incident history table | `<IncidentTable/>` | `GET /api/incidents` | 4s poll |
-| MTTR comparison chart | `<MttrChart/>` (Recharts BarChart) | `GET /api/incidents` (group client-side) | 4s poll |
-| Revenue protected chart | `<RevenueChart/>` (Recharts LineChart) | `GET /api/incidents` (cumsum client-side) | 4s poll |
-| Fault injection controls | `<DemoControls/>` (sidebar) | `POST /api/services/{name}/inject-fault` | on click |
-| Debug event log (optional) | `<DebugPanel/>` (collapsible) | `GET /api/events?limit=20` | 4s poll |
+| Status pills | `components/TopBar.jsx` | `GET /api/services` (summary), stream state | 3 s + every event |
+| Key figures | `components/KpiStrip.jsx` | `GET /api/stats` | 5 s + on results |
+| Service cards | `components/ServiceGrid.jsx` | `GET /api/services`, `/api/history`, active incidents | 3 s / 5 s |
+| Healing pipeline | `components/PipelineBoard.jsx` | `GET /api/active-incidents` | 1.5 s + every event |
+| Event bus feed | `components/EventFeed.jsx` | `GET /api/stream` | pushed |
+| Fault lab | `components/FaultLab.jsx` | `GET /api/scenarios`; `POST` fault, scenario, reset | 60 s |
+| Charts | `components/Performance.jsx` → `components/Charts.jsx` (loaded lazily) | `GET /api/mttr-chart`, `/api/revenue-series`, `/api/breakdown`, `/api/incidents` | 8 s / 6 s + on results |
+| Incident table | `components/IncidentTable.jsx` | `GET /api/incidents?limit=100` | 6 s + on results |
+| Incident drawer | `components/IncidentDrawer.jsx` | `GET /api/incidents/{id}` | on open |
 
-## Backend endpoints the frontend needs (build in Phase 5)
-```
-GET  /api/services                       -> { services: {name: {status,cpu,memory,response_time_ms,error_rate}}, summary }
-GET  /api/incidents                      -> [ {timestamp, service, root_cause, fix_applied, result, mttr_seconds, revenue_protected} ]
-GET  /api/stats                          -> { avg_mttr, baseline_mttr: 900, total_revenue_protected, incidents_resolved }
-GET  /api/active-incident                -> { active: bool, service?, stage?: "diagnosing|fixing|validating" }
-POST /api/services/{name}/inject-fault?fault_type=crash
-```
+"On results" means an immediate re-fetch when the newest event is `VALIDATION_RESULT` or `INCIDENT_LOGGED`.
 
-## Polling hook (shared)
-```jsx
-// src/hooks/usePolling.js
-import { useEffect, useState } from "react";
-const API = import.meta.env.VITE_API_URL;
+## Charts
+| Chart | Type | Content |
+|---|---|---|
+| `MttrByCause` | horizontal bar | average recovery time per root cause |
+| `RevenueArea` | area | cumulative illustrative revenue protected |
+| `MttrTrend` | line with average line | recovery time per recovered incident |
+| `ServiceBreakdown` | bar | incidents per service |
 
-export function usePolling(path, intervalMs = 4000) {
-  const [data, setData] = useState(null);
-  useEffect(() => {
-    let alive = true;
-    const tick = () =>
-      fetch(`${API}${path}`).then(r => r.json()).then(d => alive && setData(d)).catch(() => {});
-    tick();
-    const id = setInterval(tick, intervalMs);
-    return () => { alive = false; clearInterval(id); };
-  }, [path, intervalMs]);
-  return data;
-}
-```
+## Shared code
+| File | Provides |
+|---|---|
+| `lib/api.js` | `getJson`, `post` (adds `X-API-Key` when configured), `injectFault` |
+| `lib/hooks.js` | `usePolling(path, intervalMs, refreshKey)`, `useEventStream(limit)`, `useNow(ms)` |
+| `lib/format.js` | number and time formatting, `STAGES`, `stageIndex`, `FAULT_INFO`, `describeEvent` |
 
-## App composition
-```jsx
-// src/App.jsx (shape)
-function App() {
-  const services = usePolling("/api/services");
-  const incidents = usePolling("/api/incidents");
-  const stats = usePolling("/api/stats");
-  const active = usePolling("/api/active-incident");
-  return (
-    <div className="min-h-screen bg-bgPrimary text-textPrimary p-6">
-      <Header />
-      <HealthGrid services={services} />
-      <MetricRow stats={stats} />
-      <ActiveIncidentBanner active={active} />
-      <IncidentTable incidents={incidents} />
-      <MttrChart incidents={incidents} />
-      <RevenueChart incidents={incidents} />
-      <DemoControls />
-    </div>
-  );
-}
+## Endpoint shapes
 ```
-
-## HealthTile example (uses ui-tokens colors)
-```jsx
-const COLOR = { ok: "bg-healthy", degraded: "bg-degraded", down: "bg-down" };
-export function HealthTile({ name, s }) {
-  const key = s?.status === "ok" ? "ok" : s?.status === "degraded" ? "degraded" : "down";
-  return (
-    <div className={`rounded-xl p-4 ${COLOR[key]} text-white`}>
-      <div className="font-bold">{name}</div>
-      <div className="text-sm">{key === "ok" ? "HEALTHY" : key.toUpperCase()}</div>
-      <div className="text-xs opacity-80">CPU {s?.cpu ?? "—"}% | Mem {s?.memory ?? "—"}%</div>
-    </div>
-  );
-}
+GET /api/services          -> { services: { name: {status, cpu, memory, response_time_ms, error_rate, active_fault, ...} },
+                                summary: {ok, degraded, down}, total, timestamp }
+GET /api/history           -> { history: { name: [ {t, rt, err, mem, cpu, status} ] }, poll_interval }
+GET /api/active-incidents  -> { incidents: [ {incident_id, service, fault_type, stage, retry_count, detected_at, timeline, ...} ] }
+GET /api/incidents         -> { incidents: [ {id, timestamp, service, root_cause, confidence, fix_applied,
+                                retry_count, result, mttr_seconds, revenue_protected, ...} ] }
+GET /api/incidents/{id}    -> one incident + { explanation, timeline: [ {stage, ts, detail} ] }
+GET /api/stats             -> totals, average / p50 / p95 recovery time, recovery rate, first-try rate,
+                              diagnosis accuracy, average confidence, revenue, baseline
 ```
+Interactive documentation for every endpoint is at `/docs` on the backend.

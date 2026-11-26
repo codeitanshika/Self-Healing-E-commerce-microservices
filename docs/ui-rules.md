@@ -1,43 +1,43 @@
 # UI Rules — Dashboard
 
-> Your original rules kept; "Streamlit" references updated to React. The single-page, auto-refresh, numbers-not-just-dots philosophy is unchanged.
+## Principles
+- One page, no routing: everything is reachable by scrolling.
+- Updates without clicks: polling, plus Server-Sent Events for immediate refresh.
+- Show numbers as well as status, for example recovery time and retry count.
+- Be honest about state: show when the backend is unreachable or the live stream is reconnecting.
 
-## General Principles
-- Single page, no routing — examiner sees everything by scrolling.
-- Auto-refresh every 3–5s (polling hook) so the live demo updates without clicks.
-- Show numbers, not just status — "RECOVERED in 47s, ₹8,400 protected" beats a green dot.
+## Page order (top to bottom)
+1. **Top bar:** overall health and live-stream status.
+2. **Key figures:** recovery time against the manual baseline, recovery rate, diagnosis accuracy, first-try rate, revenue protected.
+3. **Service health:** one card per service.
+4. **Healing pipeline** and **event bus** beside the **fault lab**.
+5. **Performance:** four charts.
+6. **Incident history**, with a detail drawer per row.
 
-## Page Sections (top to bottom)
-1. **Title + tagline** — "Self-Healing E-Commerce Platform Monitor"
-2. **Live service health row** — 5 tiles (Auth, Cart, Payment, Inventory, Notification), colors per `ui-tokens.md`.
-3. **Summary metrics row** (4 metric cards):
-   - Avg MTTR (your system)
-   - Manual baseline MTTR (900s)
-   - Total revenue protected (₹)
-   - Incidents auto-resolved (count)
-4. **Active incident banner** (only when an incident is in progress):
-   - "🔄 Payment service: diagnosing… / fixing… / validating…"
-   - Shows current pipeline stage in real time.
-5. **Incident history table** — most recent first.
-6. **MTTR comparison chart** — bar per fault type vs baseline.
-7. **Revenue protected chart** — cumulative.
+## Incidents in progress
+- Several can be active at once; each gets its own stepper (Detect → Diagnose → Fix → Validate → Resolved).
+- A service card with an open incident says which stage the agents are in.
+- A card can read healthy while still validating. Keep the badge until the incident closes.
 
-## Active Incident Banner
-- One active incident at a time (faults injected one at a time during demo).
-- Stage comes from `GET /api/active-incident` (backend tracks current stage in the orchestrator).
-- Clears once result is RECOVERED or ESCALATED.
+## Colour
+- Status colours mean state and nothing else.
+- Never rely on colour alone: pair it with a word (HEALTHY, DEGRADED, DOWN, recovered, escalated).
+- Pair a "down" summary with "agents responding" so it does not look stuck.
 
-## Color Rules
-- Never show red + a rising number without context — pair "DOWN" with "agents responding…" so it doesn't look stuck.
-- Green consistently means good (recovered, healthy, revenue protected).
+## Charts
+- Every chart has a table view.
+- Every chart has an empty state that says how to fill it.
+- Say when a figure is illustrative (revenue) or assumed (the 900 s baseline).
 
-## Empty State
-- If there are zero incidents: show "No incidents yet — inject a fault to see the system respond" instead of empty table/charts.
+## Controls
+- Confirm destructive actions (reset demo data).
+- Disable buttons while a request is running and report the outcome in text.
+- Offer only faults a service really supports (the Nginx container: crash only).
 
-## Do NOT
-- No multi-page routing — keep it single page for demo flow.
-- No manual-refresh-only — polling auto-refresh must work.
-- No raw JSON on the main view — keep it human-readable (a collapsible "debug" panel is fine).
-
-## Demo Mode Helper
-A sidebar with fault-injection controls (service + fault-type select + one "Inject" button) calling `POST /api/services/{name}/inject-fault`, so the demo needs no separate terminal.
+## Accessibility and resilience
+- Rows and controls work from the keyboard; Escape closes the drawer.
+- Respect `prefers-reduced-motion`.
+- Layout works at phone width.
+- Never inject server text as HTML.
+- If the chart code fails to load, the rest of the dashboard keeps working.
+- Do not show raw JSON on the page.

@@ -1,16 +1,42 @@
-# React + Vite
+# Dashboard
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+React + Vite front end for the self-healing control plane. It shows live service health, the healing pipeline, the event-bus feed, charts and incident history, and includes a fault lab for demos.
 
-Currently, two official plugins are available:
+## Run
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+Start the backend first (see the [setup guide](../docs/setup-guide.md)), then from this folder:
 
-## React Compiler
+```bash
+npm install
+npm run dev        # http://localhost:5173
+```
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+## Configuration
 
-## Expanding the ESLint configuration
+Optional, in `.env.local`. Values are read when the app is built.
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+| Variable | Default | Purpose |
+|---|---|---|
+| `VITE_API_URL` | `http://localhost:8000` | Backend address |
+| `VITE_API_KEY` | empty | Sent as `X-API-Key`; must match the backend's `API_KEY`. Visible to anyone who loads the page |
+
+## Scripts
+
+| Command | Does |
+|---|---|
+| `npm run dev` | Development server |
+| `npm run lint` | ESLint |
+| `npm run build` | Production build in `dist/` |
+| `npm run preview` | Serve the build |
+
+## Layout
+
+```
+src/
+  App.jsx          fetches data and arranges the page
+  components/      one file per dashboard section
+  lib/             API client, polling and stream hooks, formatters
+  index.css        design tokens and all styles
+```
+
+See the [component registry](../docs/ui-registry.md), [UI rules](../docs/ui-rules.md) and [design tokens](../docs/ui-tokens.md).

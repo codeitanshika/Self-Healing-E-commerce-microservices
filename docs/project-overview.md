@@ -3,59 +3,66 @@
 ## Title
 Autonomous Self-Healing E-Commerce Microservices Monitor using Multi-Agent LLM Orchestration over a Lightweight Event-Driven Control Plane
 
-## One-Line Pitch
-A simulated e-commerce platform (Auth, Cart, Payment, Inventory, Notification) that detects its own failures, diagnoses root causes using a free LLM, applies the correct fix, validates recovery, retries if needed, and logs business impact — entirely autonomously, coordinated through a self-built event-driven agent architecture, at zero API cost.
+## One-line pitch
+A simulated e-commerce platform that detects its own failures, asks a language model for the cause, applies a fix, verifies recovery, retries a different fix if needed, and records the result, using only free services.
 
-## Problem Statement
-Modern e-commerce platforms run as many small services. When one fails (crash, memory leak, slow response, error spike), existing tools either:
-- Only **alert** a human (PagerDuty, Datadog) — human diagnoses + fixes manually (avg MTTR 15–45 min).
-- Only **restart blindly** (Kubernetes liveness probes) — no understanding of *why*; same fix for every problem.
-- Only **diagnose**, never fix (LLM-RCA research like RCAgent, OpenRCA).
+## Problem
+Online shops run as many small services that crash, leak memory, slow down or return errors. Common responses leave a gap:
+- **Alerting tools** notify a person, who then diagnoses and fixes.
+- **Restart probes** act quickly but take the same action for every fault.
+- **LLM root-cause tools** explain a likely cause, and many stop there.
 
-No accessible open system closes the full loop: detect → understand → fix → verify → retry — using LLM reasoning over an event-driven multi-agent architecture, reproducibly and for free.
+Research systems that close the loop in real cloud environments also exist. This project is a small testbed that runs on a laptop and measures what each stage contributes.
 
-## Research Question
-Can a multi-agent, LLM-orchestrated system autonomously detect, diagnose, and recover e-commerce microservice failures faster and more accurately than manual intervention — and what is the measurable MTTR reduction?
+## Research question
+Can a multi-agent, LLM-assisted system detect, diagnose and recover microservice failures without a person, how long does it take compared with an assumed manual response, and how much does verifying each fix add?
 
-## The 5 Simulated Services
-| Service | Real Role | Example Failure |
+## Services
+| Service | Role | Example failure |
 |---|---|---|
-| Auth | Login, sessions | Crash → no one can log in |
-| Cart | Add/remove items | CPU overload → cart actions fail |
-| Payment | Checkout, billing | Error spike / high latency → failed transactions |
-| Inventory | Stock levels | Memory leak → wrong stock data |
-| Notification | Order emails/SMS | Crash → no confirmation emails |
+| Auth | Login and sessions | Crash: no one can log in |
+| Cart | Cart items | Overload: cart actions slow down |
+| Payment | Checkout and billing | Error spike: failed payments |
+| Inventory | Stock levels | Memory leak: eventual crash |
+| Notification | Order emails and SMS | Crash: no confirmations |
 
-## The 5 Agents
-1. **Monitor** — polls all services every 5s; publishes `ANOMALY_DETECTED`.
-2. **Diagnosis** — sends metrics to a free open-weight LLM via Groq (default: `openai/gpt-oss-120b`); publishes `DIAGNOSIS_READY {root_cause, confidence, fix, business_impact}`. *(Only AI agent.)*
-3. **Fix** — executes remediation (restart/reduce_load/clear_memory/reroute_traffic/retry_with_backoff); publishes `FIX_APPLIED`.
-4. **Validation** — re-checks the service; publishes `VALIDATION_RESULT` (RECOVERED/STILL_BROKEN).
-5. **Report** — writes the incident to SQLite.
+These are simulated. With Docker running, a real Nginx container can be added as a sixth service (crash fault only).
 
-## Orchestrator
-Listens for anomalies, sequences agent calls via the event bus, manages the retry loop (max 2 retries → ESCALATED).
+## Agents
+1. **Monitor:** polls every 5 s and publishes `ANOMALY_DETECTED`.
+2. **Diagnosis:** the only agent that uses AI; asks a Groq-hosted model (default `openai/gpt-oss-120b`) for cause, confidence, fix, impact and explanation.
+3. **Fix:** applies `restart`, `reduce_load`, `clear_memory`, `retry_with_backoff` or `reroute_traffic`.
+4. **Validation:** waits 2 s and re-reads real health.
+5. **Report:** stores the incident and its timeline in SQLite.
 
-## Control Plane
-A self-built async publish/subscribe **event bus** (a short module), replacing Solace Agent Mesh — zero cost, fully understood, and a research contribution in its own right.
+An **Orchestrator** sequences them, allows 2 retries with untried fixes, then escalates. All communication goes over a small in-process **event bus**.
 
 ## Dashboard
-React + Vite app: key figures, live service cards, healing pipeline, event-bus feed, fault lab, charts and incident history with a detail panel.
+Key figures, live service cards, healing pipeline, event-bus feed, fault lab, charts, and incident history with a detail panel.
 
-## Demo Moment
-Inject a fault into Payment → walk away → within ~60s the dashboard shows the full detect→diagnose→fix→validate→log cycle with MTTR and revenue protected.
+## Demo moment
+Inject a fault into Payment and touch nothing: within seconds the dashboard shows detect, diagnose, fix, validate and log.
 
-## Novel Contribution
-A lightweight, event-driven, LLM-diagnosed *closed-loop* (with retry + verification) self-healing system for microservices, runnable on commodity hardware at zero API cost, evaluated on a reproducible testbed against a manual-response baseline.
+## Results in brief
+| Question | Result |
+|---|---|
+| Diagnosis accuracy | LLM 179/180; rule baseline 180/180 |
+| Recovery under strict healing (660 incidents) | closed loop 99.8%, open loop 95.5%, blind restart 75% |
+| Mean recovery time, diagnosis benchmark | 3.20 s against an assumed 900 s manual response |
+| Real Nginx container | 10/10 recovered, mean 10.0 s |
 
-## Tech Stack
-React + Vite + Recharts (frontend) · FastAPI (backend) · Groq/open-weight LLMs (free — model pinned via `GROQ_MODEL` env var, since Groq periodically retires model IDs) · custom async event bus · SQLite/SQLModel · Render + Vercel (free deploy).
+Simulated services and a hand-written table of effective fixes limit what these show. Details and caveats: [`docs/results/`](results/).
 
-## Team Roles (optional — plan also works solo)
-- Person A: Services + Fix agent
-- Person B: Fault injector + Validation agent
-- Person C: Monitor + Diagnosis agent + event-bus wiring
-- Person D: React dashboard + Report agent + experiments
+## Contribution
+A lightweight, event-driven closed loop (diagnose, fix, verify, retry) that runs on ordinary hardware at no cost, with measurements of when verification helps and when the model adds no accuracy over rules.
 
-## Approach
-Self-paced, 6 phases (see `build-plan.md`). Each phase ends with something runnable and a git commit. Solo or team — same phases.
+## Tech stack
+React + Vite + Recharts · FastAPI · Groq open-weight models · custom async event bus · SQLite + SQLModel · pytest + GitHub Actions · Render + Vercel
+
+## Team roles (suggested split)
+- Services and Fix agent
+- Fault scenarios and Validation agent
+- Monitor, Diagnosis agent and event bus
+- Dashboard, Report agent and experiments
+
+How it was built: [build-plan.md](build-plan.md).
