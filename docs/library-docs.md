@@ -1,167 +1,80 @@
-# Library Docs — Quick Reference
+# Library Notes
 
-> Updated for the free + React stack. Anthropic → Groq. Streamlit → React/Recharts. Solace → our own event bus.
+How this project uses its libraries. Versions are pinned in `backend/requirements.txt`, `backend/requirements-dev.txt` and `frontend/package.json`.
 
----
-
-## FastAPI + Uvicorn
-**Install:** `pip install fastapi "uvicorn[standard]"`
-**Run:** `uvicorn main:app --reload --reload-exclude "*.db" --port 8000` (the exclude stops SQLite writes from triggering their own reload loop — see main.py's docstring)
-```python
-from fastapi import FastAPI
-app = FastAPI()
-
-@app.get("/api/services/{name}/health")
-async def health(name: str):
-    return {"status": "ok", "service": name}
+## FastAPI and Uvicorn
+Routes are in `backend/main.py`. Run from `backend/`:
+```bash
+uvicorn main:app --reload --reload-exclude "*.db" --port 8000
 ```
-
----
-
-## httpx (async HTTP — used by Monitor/Validation agents)
-**Install:** `pip install httpx`
+The exclude stops database writes from restarting the server. Protected routes use dependencies:
 ```python
-import httpx, asyncio
-
-async def check(url):
-    async with httpx.AsyncClient(timeout=3.0) as client:
-        r = await client.get(url)
-        return r.json()
-
-async def check_all(urls):
-    return await asyncio.gather(*[check(u) for u in urls])
+@app.post("/api/services/{name}/fault/{fault_type}",
+          dependencies=[Depends(require_api_key), Depends(rate_limit)])
+def inject_fault(name: str, fault_type: str):
+    ...
 ```
+Background work (the Monitor, delayed scenario steps) is started with `asyncio.create_task` or `BackgroundTasks`. Live updates use `StreamingResponse` with `text/event-stream`.
 
----
-
-## psutil (real CPU/memory readings, optional realism)
-**Install:** `pip install psutil`
+## Groq and python-dotenv
+Used in `shared/llm.py` only.
 ```python
-import psutil
-cpu = psutil.cpu_percent(interval=0.1)   # 0-100
-mem = psutil.virtual_memory().percent    # 0-100
-```
-
----
-
-## Groq (free LLM — replaces paid Anthropic)
-**Install:** `pip install groq python-dotenv`
-**.env:** `GROQ_API_KEY=...` and `GROQ_MODEL=openai/gpt-oss-120b`
-```python
-import os, json
-from dotenv import load_dotenv
-from groq import Groq
-
-load_dotenv()
-client = Groq(api_key=os.getenv("GROQ_API_KEY"))
-
-resp = client.chat.completions.create(
-    model=os.getenv("GROQ_MODEL", "openai/gpt-oss-120b"),
-    max_tokens=400, temperature=0.2,
-    messages=[{"role": "user", "content": 'Reply ONLY with JSON: {"ok": true}'}],
+response = await asyncio.to_thread(
+    client.chat.completions.create,
+    model=current_model(),            # GROQ_MODEL, default openai/gpt-oss-120b
+    messages=[{"role": "user", "content": prompt}],
+    max_tokens=1500,
+    temperature=0.2,
 )
-text = resp.choices[0].message.content
-result = json.loads(text.replace("```json","").replace("```","").strip())
 ```
-**Tip:** always wrap `json.loads()` in try/except — LLMs occasionally add stray text.
-
----
+- The client is synchronous, so it runs in a worker thread.
+- Reasoning models spend tokens before answering: a small limit cuts the JSON off.
+- Parse with `parse_json_object`, which tolerates code fences and surrounding text.
+- Groq retires model IDs from time to time. Change `GROQ_MODEL`, not the code.
 
 ## SQLModel (SQLite)
-**Install:** `pip install sqlmodel`
+Tables are in `database/models.py`; the file is `backend/database/incidents.db`.
 ```python
-from sqlmodel import SQLModel, Field, Session, create_engine, select
-from typing import Optional
-
-class Incident(SQLModel, table=True):
-    id: Optional[int] = Field(default=None, primary_key=True)
-    service: str
-    root_cause: str
-    fix_applied: str
-    result: str
-    mttr_seconds: float
-    revenue_protected: float
-    timestamp: float
-
-engine = create_engine("sqlite:///database/incidents.db")
-SQLModel.metadata.create_all(engine)
-
-with Session(engine) as s:
-    s.add(Incident(service="payment", root_cause="error_spike",
-                   fix_applied="retry_with_backoff", result="RECOVERED",
-                   mttr_seconds=47.0, revenue_protected=8400.0, timestamp=1234567890))
-    s.commit()
+with Session(engine) as session:
+    rows = session.exec(select(Incident).order_by(Incident.timestamp.desc()).limit(50)).all()
 ```
+`init_db()` creates missing tables and does not alter existing ones. Adding a column to a table needs a migration or a fresh database, which is why the timeline has its own table.
 
----
-
-## Our Event Bus (replaces Solace Agent Mesh)
-No install — it's our own file `orchestrator/event_bus.py`.
-```python
-import asyncio
-from collections import defaultdict
-
-class EventBus:
-    def __init__(self):
-        self._subs = defaultdict(list)
-    def subscribe(self, topic, handler):
-        self._subs[topic].append(handler)
-    async def publish(self, topic, payload):
-        await asyncio.gather(*[h(payload) for h in self._subs[topic]])
-
-bus = EventBus()
-```
-Usage in an agent:
+## Event bus (our own)
+`orchestrator/event_bus.py`, one shared instance:
 ```python
 from orchestrator.event_bus import bus
-from shared.events import ANOMALY_DETECTED, DIAGNOSE_REQUEST
+from shared.events import FIX_REQUEST
 
-async def on_anomaly(payload):
-    await bus.publish(DIAGNOSE_REQUEST, {"service": payload["service"], ...})
-
-bus.subscribe(ANOMALY_DETECTED, on_anomaly)
+bus.subscribe(FIX_REQUEST, handler)          # async handler(payload)
+bus.subscribe_all(observer)                  # async observer(topic, payload)
+await bus.publish(FIX_REQUEST, {"service": "cart", "fix": "restart", "incident_id": "a1b2c3d4"})
 ```
+`publish` returns after every subscribed handler has finished, so a chain of events runs to completion inside the first call.
 
----
+## Docker SDK and httpx
+`services/docker_service.py` stops and restarts the Nginx container, reads `docker stats`, and probes it with a 1.5 s HTTP timeout. Without a Docker daemon the service is not registered.
 
-## React + Vite (frontend — replaces Streamlit)
-**Scaffold:** `npm create vite@latest frontend -- --template react`
-**Run:** `npm run dev` (http://localhost:5173)
-Fetch + poll pattern:
-```jsx
-import { useEffect, useState } from "react";
-const API = import.meta.env.VITE_API_URL;
+## Analysis: SciPy, NumPy, Matplotlib
+Used by `backend/experiments/` only (development requirements). Statistics helpers are in `stats_utils.py`; figure styling is in `make_figures.py`.
 
-function useServices() {
-  const [data, setData] = useState(null);
-  useEffect(() => {
-    const tick = () =>
-      fetch(`${API}/api/services`).then(r => r.json()).then(setData);
-    tick();
-    const id = setInterval(tick, 4000);   // poll every 4s
-    return () => clearInterval(id);
-  }, []);
-  return data;
-}
-```
+## pytest
+`python -m pytest -q` from `backend/`. `tests/conftest.py` clears the event bus between tests and disables Docker.
 
----
+## React and Vite
+React 19 function components. Scripts, from `frontend/`:
 
-## Recharts (charts in React — replaces Plotly/Streamlit)
-**Install:** `npm install recharts`
-```jsx
-import { BarChart, Bar, XAxis, YAxis, ReferenceLine, Tooltip } from "recharts";
+| Command | Does |
+|---|---|
+| `npm run dev` | development server on port 5173 |
+| `npm run build` | production build in `dist/` |
+| `npm run lint` | ESLint |
+| `npm run preview` | serves the build |
 
-<BarChart width={600} height={300} data={mttrData}>
-  <XAxis dataKey="root_cause" /><YAxis />
-  <Tooltip />
-  <Bar dataKey="mttr_seconds" />
-  <ReferenceLine y={900} strokeDasharray="4 4" label="Manual baseline" />
-</BarChart>
-```
+Environment variables are read at build time through `import.meta.env`: `VITE_API_URL`, `VITE_API_KEY`.
 
----
+## Recharts
+Charts sit in `components/Charts.jsx` inside `ResponsiveContainer`, loaded with `React.lazy` so the library does not delay the first paint.
 
-## Tailwind CSS (styling)
-**Install:** `npm install -D tailwindcss postcss autoprefixer && npx tailwindcss init -p`
-Set `content: ["./src/**/*.{js,jsx}"]` and add the three `@tailwind` directives to `src/index.css`. Use the color tokens from `ui-tokens.md` as your Tailwind theme colors.
+## Styling
+Hand-written CSS in `src/index.css`; see [ui-tokens.md](ui-tokens.md). No CSS framework.

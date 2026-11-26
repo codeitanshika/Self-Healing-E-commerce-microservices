@@ -1,90 +1,76 @@
 # Code Standards
 
-> Supersedes the earlier draft. Changes: Groq replaces Anthropic; our own event bus replaces SAM; React replaces Streamlit; single FastAPI app structure.
-
 ## General
-- Python 3.11+, follow PEP8 (use `black` if available).
-- All agent I/O (HTTP calls, event handlers) uses `async def` + `await` — no blocking calls inside agents.
-- No hardcoded secrets — load from `.env` via `python-dotenv`.
-- Every file must import/run without errors before you commit.
+- Python: follow PEP 8. CI runs Python 3.13; `requirements-dev.txt` needs 3.12 or newer.
+- Event handlers are `async def`. Run blocking work (the Groq client, Docker calls) in a worker thread with `asyncio.to_thread`.
+- No hard-coded secrets: use environment variables, loaded from `backend/.env`.
+- Constants (limits, fix tables, rates, service list) belong in `shared/config.py`.
 
-## Naming Conventions
-- Files: `snake_case.py` (Python), `PascalCase.jsx` (React components).
-- Classes: `PascalCase` (`DiagnosisAgent`, `Incident`).
-- Functions/variables: `snake_case` (Python), `camelCase` (JS).
-- Event topic names: `UPPER_SNAKE_CASE` constants in `shared/events.py`.
-- Service names/logical ports: auth=8001, cart=8002, payment=8003, inventory=8004, notification=8005.
+## Naming
+- Files: `snake_case.py`, React components `PascalCase.jsx`.
+- Classes `PascalCase`; Python functions and variables `snake_case`; JavaScript `camelCase`.
+- Event topics: `UPPER_SNAKE_CASE` constants in `shared/events.py`. Never type a topic as a bare string.
 
-## Folder Structure
+## Folder structure
 ```
-self-healing-ecommerce/
-├── backend/
-│   ├── services/        # simulated_service.py, service_manager.py
-│   ├── agents/          # monitor, diagnosis, fix, validation, report
-│   ├── orchestrator/    # event_bus.py, orchestrator.py
-│   ├── shared/          # config.py, models.py, events.py, llm.py
-│   ├── database/        # db.py  (incidents.db auto-created, NOT committed)
-│   ├── fault_injector/  # inject.py
-│   ├── main.py
-│   ├── requirements.txt
-│   └── .env / .env.example
-├── frontend/            # React + Vite
-│   └── src/{components,hooks,App.jsx}
-├── docs/
-└── README.md
+backend/
+  agents/          monitor, diagnosis, fix, validation, report, rule_based_diagnosis
+  orchestrator/    event_bus.py, orchestrator.py
+  services/        simulated_service, docker_service, service_manager
+  shared/          config, events, llm, stream, security
+  database/        models, queries (read only), admin (reset)
+  fault_injector/  scenarios.py
+  experiments/     runners, analysis, figures, raw CSV results
+  tests/           pytest suite
+  main.py          FastAPI app and routes
+frontend/src/      App.jsx, components/, lib/
+docs/
 ```
 
-## Service Endpoint Contract
-Exposed via the FastAPI app (single-app structure, addressed by name):
+## Service interface
+Every service, simulated or real, provides:
 ```
-GET  /api/services/{name}/health
-  -> { "status": "ok"|"degraded"|"down", "service": str,
-       "cpu": float, "memory": float,
-       "response_time_ms": int, "error_rate": float }
-
-POST /api/services/{name}/fault/{mode}
-  mode in {none, crash, slow, memory, error}
-  -> { "fault_set": mode }
+get_health()            -> {status: "ok"|"degraded"|"down", service, cpu, memory, response_time_ms, error_rate, active_fault, ...}
+inject_fault(fault)     fault in {crash, slow, memory, error}; an "error" key reports refusal
+heal(fix_type)          applies a fix
 ```
-Any new service MUST honor this shape or the Monitor Agent breaks.
+Agents go through `ServiceManager` and never depend on the concrete class.
 
-## Event Payload Contract
-Every event payload is a JSON-serializable dict and MUST include:
-- `service`: str
-- `timestamp`: float (unix time)
+## Events
+- Agents communicate through the bus only; they do not call each other.
+- Incident events carry `service` and `incident_id`. The topic list and payloads are in [architecture.md](architecture.md).
+- The one shared object is the Orchestrator's `incident_cache`, read by the Report Agent.
+- Observers (`subscribe_all`) must never affect the pipeline.
+- A handler that listens to a topic it also publishes must guard against reacting to itself.
 
-Diagnosis Agent output MUST be valid JSON:
-```json
-{
-  "root_cause": "service_crash|memory_leak|cpu_overload|high_latency|error_spike",
-  "confidence": 0-100,
-  "fix": "restart|reduce_load|clear_memory|reroute_traffic|retry_with_backoff",
-  "business_impact": "string",
-  "explanation": "string"
-}
-```
-If the LLM returns invalid JSON, the Diagnosis Agent catches it, logs it, and defaults to `{"root_cause": "unknown", "fix": "restart", "confidence": 0, ...}`.
+## LLM access
+- All calls go through `ask_llm` in `shared/llm.py`: model from `GROQ_MODEL`, temperature 0.2, up to 1500 tokens, one retry, then a safe default.
+- Only the Diagnosis Agent calls the model.
+- The model chooses a fix name; it never runs commands. Unknown fix names are executed as `restart`.
 
-## LLM Access (Groq, free)
-- All LLM calls go through one helper in `shared/llm.py` (the `ask_llm` function from setup-guide.md).
-- Model from env (`GROQ_MODEL`), `temperature=0.2` for consistent JSON.
-- Never call the LLM from anywhere except the Diagnosis Agent.
-
-## Database Rule
-Only the Report Agent writes to `incidents.db`. The dashboard (via REST) only reads. Avoids write conflicts.
+## Database
+- Only the Report Agent inserts rows. `database/queries.py` reads; `database/admin.py` deletes for the demo reset.
+- Only final results (`RECOVERED`, `ESCALATED`) are stored.
 
 ## Logging
-Every agent prints one line per event handled:
+Agents print with a class prefix:
 ```
-[AGENT_NAME] <event received> -> <action taken>
+[FixAgent] payment: applying fix 'restart'
 ```
-Example: `[FIX_AGENT] payment:memory_leak -> applying clear_memory`
 
-## Testing Before Integration
-Each agent must run in isolation with a hardcoded sample event before wiring to the event bus. Include an `if __name__ == "__main__":` block with a sample payload.
+## Tests and checks
+```bash
+cd backend && python -m pytest -q
+cd frontend && npm run lint && npm run build
+```
+- Tests must run without a network, an API key or Docker (`tests/conftest.py` enforces the last).
+- Add a test with each behaviour change.
+- Some agent files have an `if __name__ == "__main__":` demo. The diagnosis demo calls Groq, and the report demo writes sample rows into your local database.
 
-## Git Workflow
-- Solo: commit per working chunk on `main`, push every session.
-- Team: branch per person (`feat/diagnosis-agent`), merge to `main` only when it runs standalone.
+## Experiments
+Runners overwrite the CSV files that the published results come from. Commit or restore them deliberately.
+
+## Git workflow
+- Work on a branch, open a pull request, merge into `main` when CI passes. `main` is what gets deployed.
+- Commit messages start with `feat:`, `fix:`, `docs:`, `chore:`, `test:` or `ci:`.
 - Never commit `.env` or `*.db`.
-- Tag milestones (`v0.1-services`, `v1.0-release`).

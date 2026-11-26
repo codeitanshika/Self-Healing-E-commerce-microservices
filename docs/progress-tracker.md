@@ -51,7 +51,7 @@ Each phase ends with a runnable result and a commit.
 - [x] Backend deployed to Render
 - [x] Dashboard deployed to Vercel
 - [x] Redesigned version merged into `main`; the live dashboard and API serve it
-- [ ] Confirm `API_KEY` on Render and `VITE_API_KEY` on Vercel are set
+- [x] `API_KEY` set on Render, and the deployed dashboard sends an `X-API-Key` header
 - [x] Diagnosis benchmark: 20 scenarios × 3 trials × 3 models = 180 trials
 - [x] Pipeline latency, noisy-diagnosis, strategy-comparison and sensitivity experiments
 - [x] Real Nginx container run
