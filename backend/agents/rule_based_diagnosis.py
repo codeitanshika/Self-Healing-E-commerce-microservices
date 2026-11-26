@@ -1,20 +1,20 @@
 """
 rule_based_diagnosis.py
 =======================
-Rule-Based Baseline Healer — used for research paper comparison.
+Rule-Based Baseline Healer — used for experiment comparison.
 
 This is Baseline 2 (the stronger one). It diagnoses faults using
 plain if-else threshold rules instead of an LLM.
 
 WHY THIS EXISTS:
-The paper needs to prove the LLM adds value over simple rules.
+It tests whether the LLM adds value over simple rules.
 We run the same 20 fault scenarios through both this rule-based
 system AND the LLM-based system, then compare:
 - Diagnosis accuracy (did it name the right root cause?)
 - MTTR (how fast did it recover?)
 - First-try success rate
 
-If the LLM is meaningfully better → that IS the paper's result.
+If the LLM is meaningfully better → that is a result.
 If they're roughly equal → that is ALSO a valid finding (saves cost).
 Either way, you have a real, measured comparison.
 """

@@ -1,221 +1,118 @@
-# Setup Guide — From Empty VS Code to Deployed App
+# Setup guide
 
-Follow this top to bottom for Phase 0. Later sections (frontend scaffold, deployment) are referenced from their phases.
+From a fresh clone to a running system, then deployment. Commands are shown for Windows PowerShell; differences for macOS and Linux are noted.
 
----
+## 1. Prerequisites
 
-## Part A — Create the repo (Phase 0)
+| Tool | Version | Needed for |
+|---|---|---|
+| Python | 3.12 or newer | backend, tests, analysis (CI uses 3.13) |
+| Node.js | 20.19 or newer | dashboard (CI uses 22) |
+| Git | any recent | cloning |
+| Groq API key | free, from [console.groq.com](https://console.groq.com) | LLM diagnosis |
+| Docker Desktop | optional | the real Nginx service |
 
-### 1. Make the project folder
-```bash
-mkdir self-healing-ecommerce
-cd self-healing-ecommerce
-code .                       # opens VS Code in this folder
+The tests and the `--mode rule` experiments run without an API key.
+
+## 2. Clone
+
+```powershell
+git clone https://github.com/codeitanshika/Self-Healing-E-commerce-microservices
+cd Self-Healing-E-commerce-microservices
 ```
 
-### 2. Initialize git
-In the VS Code terminal (`Ctrl+\``):
-```bash
-git init
-git branch -M main
-```
+## 3. Backend
 
-### 3. Create the folder structure
-```bash
-# backend
-mkdir -p backend/services backend/agents backend/orchestrator backend/shared backend/database backend/fault_injector
-# python package markers
-touch backend/services/__init__.py backend/agents/__init__.py backend/orchestrator/__init__.py backend/shared/__init__.py backend/database/__init__.py backend/fault_injector/__init__.py
-# docs
-mkdir -p docs
-```
-(On Windows without `touch`, create the empty `__init__.py` files via the VS Code file explorer.)
-
-### 4. Add `.gitignore` (project root)
-```
-# Python
-__pycache__/
-*.pyc
-venv/
-.env
-
-# Database
-*.db
-
-# Node
-node_modules/
-dist/
-.env.local
-
-# IDE / OS
-.vscode/
-.idea/
-.DS_Store
-```
-
-### 5. Python virtualenv + dependencies
-```bash
+```powershell
 cd backend
 python -m venv venv
-source venv/bin/activate        # Windows: venv\Scripts\activate
-```
-Create `backend/requirements.txt`:
-```
-fastapi
-uvicorn[standard]
-httpx
-psutil
-groq
-python-dotenv
-sqlmodel
-```
-Install:
-```bash
-pip install -r requirements.txt
+.\venv\Scripts\Activate.ps1          # macOS/Linux: source venv/bin/activate
+pip install -r requirements-dev.txt
+copy ..\.env.example .env            # macOS/Linux: cp ../.env.example .env
 ```
 
-### 6. Groq API key
-- Go to console.groq.com, sign up (free, no card), create an API key.
-- Create `backend/.env.example` (committed, no secret):
-  ```
-  GROQ_API_KEY=your_key_here
-  GROQ_MODEL=openai/gpt-oss-120b
-  ```
-- Create `backend/.env` (NOT committed) and paste your real key.
+Open `backend/.env` and replace `your_groq_key_here` with your key. Never commit this file.
 
-### 7. Verify Groq works
-Create `backend/test_groq.py`:
-```python
-import os, json
-from dotenv import load_dotenv
-from groq import Groq
+Optional check that the key works (should print `{"ok": true}`):
 
-load_dotenv()
-client = Groq(api_key=os.getenv("GROQ_API_KEY"))
-
-resp = client.chat.completions.create(
-    model=os.getenv("GROQ_MODEL", "openai/gpt-oss-120b"),
-    messages=[{"role": "user", "content": 'Reply ONLY with JSON: {"ok": true}'}],
-    max_tokens=50,
-)
-print(resp.choices[0].message.content)
-```
-Run `python test_groq.py`. You should see `{"ok": true}`. Delete the file after (or keep it as a smoke test).
-
-### 8. First commit + push to GitHub
-- Create an empty repo on github.com (no README, since you have one).
-```bash
-cd ..
-git add .
-git commit -m "chore: initial project structure and tooling"
-git remote add origin https://github.com/<you>/self-healing-ecommerce.git
-git push -u origin main
+```powershell
+python test_groq.py
 ```
 
-**Phase 0 done.** ✅
+Start the server:
 
----
-
-## Part B — Groq instead of Anthropic (important note)
-
-Your original `library-docs.md` used the Anthropic SDK (paid). Use this **free** pattern everywhere instead. The only differences are the import, the client, and the response path.
-
-```python
-import os, json
-from dotenv import load_dotenv
-from groq import Groq
-
-load_dotenv()
-client = Groq(api_key=os.getenv("GROQ_API_KEY"))
-
-def ask_llm(prompt: str) -> dict:
-    resp = client.chat.completions.create(
-        model=os.getenv("GROQ_MODEL", "openai/gpt-oss-120b"),
-        messages=[{"role": "user", "content": prompt}],
-        max_tokens=400,
-        temperature=0.2,                      # low = more consistent JSON
-    )
-    text = resp.choices[0].message.content
-    try:
-        # strip accidental ```json fences if present
-        text = text.replace("```json", "").replace("```", "").strip()
-        return json.loads(text)
-    except json.JSONDecodeError:
-        return {"root_cause": "unknown", "confidence": 0,
-                "fix": "restart", "business_impact": "unknown",
-                "explanation": "LLM returned invalid JSON; defaulting."}
+```powershell
+uvicorn main:app --reload --reload-exclude "*.db" --port 8000
 ```
 
-Groq free-tier limits are generous for development and experiments. If you ever hit a rate limit mid-experiment, just wait a minute and continue.
+Keep `--reload-exclude "*.db"`: without it every saved incident restarts the server, which can loop while a service is unhealthy. API documentation is at <http://localhost:8000/docs>.
 
----
+## 4. Dashboard
 
-## Part C — Frontend scaffold (Phase 5)
+In a second terminal, from the project folder:
 
-```bash
-# from project root
-npm create vite@latest frontend -- --template react
+```powershell
 cd frontend
 npm install
-npm install recharts
-npm install -D tailwindcss postcss autoprefixer
-npx tailwindcss init -p
-```
-Configure Tailwind `content` to scan `./src/**/*.{js,jsx}` and add the directives to `src/index.css`. Point the frontend at the backend with an env var:
-```
-# frontend/.env
-VITE_API_URL=http://localhost:8000
-```
-Run with `npm run dev` (serves on `http://localhost:5173`).
-
-**CORS:** in `backend/main.py`, allow the frontend origin:
-```python
-from fastapi.middleware.cors import CORSMiddleware
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["http://localhost:5173"],   # add your Vercel URL later
-    allow_methods=["*"], allow_headers=["*"],
-)
+npm run dev
 ```
 
----
+Open <http://localhost:5173>. The dashboard talks to `http://localhost:8000` unless `VITE_API_URL` is set in `frontend/.env.local`.
 
-## Part D — Deployment (Phase 6)
+## 5. Real Nginx service (optional)
 
-### Backend → Render (free)
-1. Push your code to GitHub.
-2. On render.com: New → Web Service → connect the repo.
-3. Root directory: `backend`. Build: `pip install -r requirements.txt`.
-   Start: `uvicorn main:app --host 0.0.0.0 --port $PORT`.
-4. Add environment variable `GROQ_API_KEY` (and `GROQ_MODEL`).
-5. Note the public URL (e.g. `https://yourapp.onrender.com`).
+With Docker Desktop running, from the project folder:
 
-> Free Render services sleep when idle and take ~30s to wake. Fine for a portfolio/demo; mention it in your README.
-
-### Frontend → Vercel (free)
-1. On vercel.com: New Project → import the repo.
-2. Root directory: `frontend`. Framework preset: Vite.
-3. Add env var `VITE_API_URL=https://yourapp.onrender.com`.
-4. Deploy → you get a public `https://...vercel.app` URL.
-
-### Final wiring
-- Add the Vercel URL to the backend CORS `allow_origins`.
-- Redeploy backend. Test the live dashboard end to end.
-
----
-
-## Part E — Everyday git workflow
-
-```bash
-# start of a session
-git pull
-
-# ... do work, keep it runnable ...
-
-git add .
-git commit -m "feat: monitor agent threshold rules"
-git push
+```powershell
+docker compose up -d
 ```
-- One concern per commit. Clear message prefix: `feat:`, `fix:`, `docs:`, `chore:`, `refactor:`.
-- Tag milestones: `git tag v0.1-services && git push --tags`.
-- If in a team: branch per person (`feat/diagnosis-agent`), merge to `main` only when it runs.
+
+Restart the backend. A sixth card, `nginx`, appears. Only the crash fault applies to it.
+
+## 6. Checks
+
+```powershell
+cd backend
+python -m pytest -q
+
+cd ..\frontend
+npm run lint
+npm run build
+```
+
+GitHub Actions runs the same checks on pushes to `main` and on pull requests.
+
+## 7. Configuration
+
+All settings are environment variables, listed with comments in [`.env.example`](../.env.example) and in the [README](../README.md).
+
+## 8. Deployment
+
+### Backend on Render
+1. New, then Web Service, and connect the repository.
+2. Root directory `backend`. Build: `pip install -r requirements.txt`. Start: `uvicorn main:app --host 0.0.0.0 --port $PORT`.
+3. Environment variables: `GROQ_API_KEY`, `GROQ_MODEL`, `ALLOWED_ORIGINS` (your Vercel URL) and `API_KEY`. Without `API_KEY`, anyone who finds the URL can inject faults or reset the data.
+
+Free services sleep when idle, so the first request can take up to a minute. The incident database does not survive a restart.
+
+### Dashboard on Vercel
+1. New Project, and import the repository.
+2. Root directory `frontend`, framework preset Vite.
+3. Environment variables: `VITE_API_URL` (your Render URL) and `VITE_API_KEY` (same value as `API_KEY`).
+
+`VITE_API_KEY` is compiled into the public JavaScript, so visitors can read it. It deters casual abuse and is not real access control.
+
+### After deploying
+Open the dashboard, inject one fault and confirm that it recovers.
+
+## 9. Troubleshooting
+
+| Symptom | Fix |
+|---|---|
+| "Backend unreachable" | Start uvicorn; check the port and `VITE_API_URL` |
+| Browser blocks requests (CORS) | Add the dashboard's address to `ALLOWED_ORIGINS` |
+| Diagnosis shows `unknown` | Check the network and `GROQ_API_KEY` |
+| 401 on fault injection | `VITE_API_KEY` must match `API_KEY` |
+| 429 rate limit | Wait a minute, or raise `RATE_LIMIT_MAX` |
+| Event feed stops updating after a backend restart | Reload the page |
+| `Activate.ps1` is blocked | Run `Set-ExecutionPolicy -Scope Process RemoteSigned` first |

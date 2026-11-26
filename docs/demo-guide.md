@@ -17,7 +17,7 @@ cd frontend
 npm install
 ```
 
-`frontend/.env` already points at `http://localhost:8000`. If you set `API_KEY` in the backend `.env`, also put `VITE_API_KEY=<same value>` in `frontend/.env.local`.
+The dashboard talks to `http://localhost:8000` unless `VITE_API_URL` says otherwise. If you set `API_KEY` in the backend `.env`, also put `VITE_API_KEY=<same value>` in `frontend/.env.local`.
 
 ## Every demo: start it (two terminals)
 
@@ -40,6 +40,7 @@ Optional real container (needs Docker Desktop running): `docker compose up -d`, 
 
 1. Open the dashboard and click **Reset demo data** (confirm). The page starts clean.
 2. Make sure the top-right pills read **All systems operational** and **Live stream**.
+3. During the demo, let each incident finish before injecting the next: the Monitor does not poll while it is healing.
 
 ## Suggested 6-minute script
 
@@ -62,14 +63,15 @@ Optional real container (needs Docker Desktop running): `docker compose up -d`, 
 | Pill says "Backend unreachable" | Backend terminal not running or wrong port; restart uvicorn |
 | "Reconnecting..." pill | Stream dropped; it reconnects on its own within seconds |
 | Diagnosis says `unknown` | Groq unreachable or key invalid; the system falls back to a restart, then tries other fixes if the service is still broken. Check `GROQ_API_KEY`. |
-| Service stuck anomalous | Click **Reset demo data**, or `POST /api/services/<name>/heal` |
+| Service stuck anomalous | Click **Reset demo data** |
+| Event feed stops updating after a backend restart | Reload the dashboard page |
 | Nothing happens on Inject | If you set `API_KEY`, the frontend needs a matching `VITE_API_KEY` |
 
 ## Commands to show the engineering and the research
 
 ```powershell
 cd backend
-python -m pytest -q                                   # 66 tests
+python -m pytest -q                                   # 77 tests
 curl.exe -N http://localhost:8000/api/stream          # the raw live event stream
 curl.exe -X POST http://localhost:8000/api/services/cart/fault/slow   # inject from a terminal
 
@@ -78,11 +80,13 @@ python -m experiments.analyze                         # statistics.md
 python -m experiments.analyze_pipeline                # pipeline-latency.md
 python -m experiments.analyze_noise                   # verification-under-noise.md
 python -m experiments.analyze_strategies              # strategy-comparison.md
+python -m experiments.sensitivity                     # sensitivity.md
 python -m experiments.make_figures                    # figures
 
-# rerun experiments (LLM ones need GROQ_API_KEY)
+# rerun experiments (LLM ones need GROQ_API_KEY). WARNING: these overwrite the
+# published CSVs in experiments/; restore them with `git checkout -- experiments`
 python -m experiments.run_pipeline --service payment --fault all --trials 5 --mode rule
 python -m experiments.run_pipeline --scenario everything-breaks --trials 5 --mode rule
-python -m experiments.run_strategies --mode llm --model openai/gpt-oss-120b --trials 3
+python -m experiments.run_strategies --mode llm --model openai/gpt-oss-120b --trials 10
 python -m experiments.run_pipeline --service nginx --fault crash --trials 10 --mode rule   # needs Docker
 ```

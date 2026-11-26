@@ -63,7 +63,7 @@ FIX_MAP = {
 
 # ── Revenue per second (illustrative, for dashboard metric) ─────
 # Used to calculate "revenue protected" vs manual 15-min baseline.
-# These are fake numbers — state clearly in the paper they are illustrative.
+# These are made-up numbers: always present the figure as illustrative.
 REVENUE_PER_SECOND = {
     "auth":         5.0,    # ₹5/s — login outage affects everything
     "cart":         8.0,    # ₹8/s — cart down = no purchases

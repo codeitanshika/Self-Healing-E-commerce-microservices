@@ -1,6 +1,10 @@
 # Retry Loop Verification — Test Report
 
-> Historical report: it describes the earlier policy, where both retries used the same fix (now `RETRY_POLICY=repeat`). By default each retry now uses a fix not yet tried. The bounded-retry and escalation behaviour is unchanged.
+> Historical report: the manual test below used the earlier policy, where both retries used the same fix (now `RETRY_POLICY=repeat`). The bounded-retry and escalation behaviour is unchanged.
+
+## Current behaviour
+
+By default (`RETRY_POLICY=distinct`) each retry uses a fix not yet tried on the incident. In the example below the sequence would now be `reduce_load`, then `restart`, then `clear_memory`, then escalation. Automated tests cover this: `test_still_broken_retries_then_escalates` and `test_orchestrator_ignores_its_own_escalation_event` in `backend/tests/test_orchestrator.py`, and the retry-policy tests in `backend/tests/test_fix_map.py`.
 
 ## Objective
 
@@ -76,13 +80,4 @@ the handler returns immediately without further processing. This
 preserves single-write delivery to the Report Agent while preventing the
 Orchestrator from reacting to its own terminal-state announcements.
 
-**Significance.** This is a representative instance of a feedback-loop
-hazard inherent to publish/subscribe architectures where a single
-component both consumes and produces events on the same topic — a
-pattern common to terminal-state propagation in event-driven systems.
-The defect and its resolution are documented here as a concrete
-engineering finding, relevant to this project's Discussion/Limitations
-section as evidence of the practical challenges of building an
-event-driven control plane from first principles (as opposed to using
-battle-tested middleware where such guarantees may be handled
-internally).
+**Significance.** A component that both consumes and produces events on the same topic can feed back into itself. This is a typical hazard of publish/subscribe systems, and building the control plane ourselves means such guarantees have to be handled in our own code.

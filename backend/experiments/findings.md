@@ -33,7 +33,7 @@ free open-weight chat models available on Groq at the time of this run.
 | Rule-based accuracy | 180/180 (100%) |
 | Recovery rate | 180/180 (100%) — see caveat below |
 | Mean MTTR | 3.20s (σ = 0.57s, range 2.44–5.38s) |
-| Manual baseline MTTR | 900s (illustrative) / 7,560s (PagerDuty-measured industry average [11]) |
+| Manual baseline MTTR | 900s (assumed, not measured) |
 | Total time saved (vs. 900s baseline) | 161,424s ≈ 44.8 hours across 180 incidents |
 
 ## Per-model results
@@ -56,18 +56,17 @@ free open-weight chat models available on Groq at the time of this run.
 ## Key Findings
 
 ### Finding 1 — MTTR reduction
-Mean recovery time was 3.20s versus a 900s conservative manual baseline
-(99.6% reduction) and versus PagerDuty's independently measured industry
-average of ~7,560s (99.96% reduction) [11]. Across 180 recovered incidents
+Mean recovery time was 3.20s versus an assumed 900s manual baseline
+(99.6% reduction). The timer starts at fault injection and the diagnosis agent
+is called directly, so monitor detection delay is not included. Across 180 recovered incidents
 this represents ~44.8 hours of downtime avoided against the conservative
 baseline alone.
 
 ### Finding 2 — The fault-simulation fix worked
 With the fault simulation made time-based instead of poll-count-based
-(see project root-cause writeup in `docs/paper.md` §6.3), the memory-leak
-misclassification from the June run did not recur across any of the 135
-memory-fault trials (45 per fault type × 3 models) in this run —
-memory_leak was diagnosed correctly 45/45 times.
+(growth now depends on time since injection), the memory-leak
+misclassification from the June run did not recur: memory_leak was diagnosed
+correctly in all 45 memory-fault trials (5 services × 3 trials × 3 models).
 
 ### Finding 3 — The one remaining miss was an infrastructure hiccup, not a reasoning error
 The single LLM misclassification (`gpt-oss-120b`, cart/slow, trial 1)
@@ -75,23 +74,23 @@ returned `root_cause: "unknown", confidence: 0` — the `_safe_default()`
 fallback in `shared/llm.py`, which fires when the API call fails or returns
 non-JSON output. This is not a diagnostic reasoning failure; it is the
 system's safety fallback correctly engaging on a transient error, and the
-Fix Agent's default fix (`restart`) still fully recovered the service. This
-is arguably a *positive* result for the "what if the LLM is wrong/fails"
-question the design anticipates (see viva Q5 in `progress-tracker.md`).
+Fix Agent's default fix (`restart`) recovered the service under this run's
+any-fix-heals setting. Under strict healing (today's default) a restart does
+not cure a slow fault, so the retry loop would have to recover it.
 
-### Finding 4 — Recovery rate is not currently a meaningful discriminator
-**Caveat, stated plainly:** `SimulatedService.heal()` resets a service to
-full health unconditionally, regardless of which `fix_type` string is
-passed to it. This means *any* diagnosed fix — correct or not — currently
-produces `RECOVERED`, so a 100% recovery rate is a property of the
-simulation's `heal()` implementation, not evidence that fix *selection*
-mattered. Diagnosis accuracy is the metric in this study that actually
+### Finding 4 — Recovery rate in this run is not a meaningful discriminator
+**Caveat, stated plainly:** this benchmark ran with any-fix-heals
+(`STRICT_HEALING=0`), where `SimulatedService.heal()` resets a service to
+full health whichever `fix_type` is passed. *Any* diagnosed fix, correct or
+not, produced `RECOVERED`, so the 100% recovery rate is a property of that
+setting, not evidence that fix *selection* mattered. Diagnosis accuracy is the metric in this study that actually
 varies with model/method choice; recovery rate and MTTR mostly reflect
-API latency and the fixed 2s validation delay. This is flagged explicitly as
-future work: making `heal()` fix-sensitive (only certain fixes resolve
-certain root causes) so the retry/escalation path can be exercised by real
-(not synthetic) trials, and so recovery rate becomes a meaningful metric
-again.
+API latency and the fixed 2s validation delay.
+
+**Since then:** strict healing was added and is the default, so only a fix
+that suits the fault cures it. Fix selection and retries are measured in
+[strategy-comparison.md](../../docs/results/strategy-comparison.md) and
+[verification-under-noise.md](../../docs/results/verification-under-noise.md).
 
 ### Finding 5 — LLMs frequently choose a different, but not "canonical," fix
 Even when root_cause was correctly diagnosed, the LLM's chosen `fix` for
@@ -102,32 +101,25 @@ fix for `error_spike`. This is because the primary fix is read directly from
 the LLM's own JSON output (`orchestrator.py`'s `on_diagnosis_ready`), not
 looked up from `FIX_MAP` — `FIX_MAP` is only consulted for the *retry* fix
 after a `STILL_BROKEN` result. Because of Finding 4, this divergence had no
-effect on outcomes here, but it is worth noting as a real behavioral
-observation: the LLM is not simply reproducing the documented fix table, it
-is independently reasoning about remediation each time.
+effect on outcomes here. It does matter under strict healing, where
+`reduce_load` does not cure an error spike (see the strategy comparison).
 
 ## Baseline Comparison Table
 
-| Approach | Accuracy | Mean MTTR | Recovery Rate* |
+| Approach | Diagnosis accuracy | Mean MTTR | Recovery rate* |
 |---|---|---|---|
-| Manual (human, illustrative) | ~100%† | 900s | 100% |
-| Manual (human, industry-measured [11]) | ~100%† | ~7,560s | — |
-| Rule-based healer | 100% (180/180) | ~3.2s | 100%* |
-| LLM-based healer (ours, pooled) | 99.4% (179/180) | 3.20s | 100%* |
+| Manual (assumed) | not measured | 900s | not measured |
+| Rule-based diagnosis | 100% (180/180) | not timed in this run | not applied in this run |
+| LLM-based (ours, pooled) | 99.4% (179/180) | 3.20s | 100% (180/180) |
 
-†Manual diagnosis is assumed correct; human MTTR figures are external
-estimates, not measured on this testbed.
-*See Finding 4 — recovery rate is not currently fix-sensitive in this
-testbed and should not be read as evidence of correct fix selection.
+*See Finding 4: recovery rate was not fix-sensitive in this run.
 
 ## Limitations
-- Services are simulated, not real containers.
-- 20 scenarios × 3 trials × 3 models = 180 trials on a single testbed —
-  larger than the June single-run study but still small by ML-evaluation
-  standards.
-- Manual baseline is an estimate/external figure, not measured on this
-  testbed.
-- `heal()` is not fix-sensitive (Finding 4) — recovery rate/MTTR currently
-  measure loop latency, not remediation correctness.
-- Free-tier model availability is not a stable experimental control — see
-  `docs/paper.md` §6.2.
+- Services are simulated in this benchmark.
+- 20 scenarios × 3 trials × 3 models = 180 trials on a single testbed: small
+  by ML-evaluation standards.
+- The manual baseline is an assumption, not measured.
+- Recovery rate and MTTR here measure loop latency, not remediation
+  correctness (Finding 4).
+- Free-tier model availability is not a stable experimental control: model IDs
+  get retired.

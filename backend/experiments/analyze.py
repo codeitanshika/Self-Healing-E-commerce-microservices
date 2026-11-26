@@ -1,7 +1,7 @@
 """
 analyze.py
 ==========
-Turns the raw per-trial experiment CSVs into the statistics the paper
+Turns the raw per-trial experiment CSVs into the statistics the report
 reports: confidence intervals, significance tests and effect sizes.
 
     python -m experiments.analyze            # writes docs/results/statistics.{md,json}

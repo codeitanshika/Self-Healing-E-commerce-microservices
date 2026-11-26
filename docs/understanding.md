@@ -60,7 +60,7 @@ Diagnosis Agent sends it something like:
 
 And it replies with structured JSON we can act on. The "intelligence" of the project is in **how we prompt it**, not in any model we build.
 
-**Why not just use if-else rules instead of an LLM?** You could — and that's exactly your research baseline to compare against. The LLM's advantage is handling *combinations* and *unseen patterns* a rule wouldn't anticipate, and producing a human-readable explanation. Your paper measures whether that advantage is real and worth it.
+**Why not just use if-else rules instead of an LLM?** You could — and that's exactly your research baseline to compare against. The LLM's advantage is handling *combinations* and *unseen patterns* a rule wouldn't anticipate, and producing a human-readable explanation. The experiments measure this: on the current four fault types the rules were just as accurate.
 
 ---
 
@@ -75,7 +75,7 @@ Problem: every agent must know about every other agent. Change one, you break ot
 **Events (loose coupling):**
 The Monitor doesn't know the Diagnosis Agent exists. It just shouts into a room: *"ANOMALY_DETECTED on payment!"* Whoever cares is listening and reacts. The Diagnosis Agent is listening, so it wakes up. When done, it shouts *"DIAGNOSIS_READY!"* and the Orchestrator reacts. Nobody is hardwired to anybody.
 
-That "room" is the **event bus**. Enterprise products like **Solace Agent Mesh** or **Kafka** are industrial-strength event buses. We don't need that scale, and they cost money / need heavy setup and paid LLMs. So we write our own tiny one — an async publish/subscribe dictionary, about 40 lines. It does the same *conceptual* job:
+That "room" is the **event bus**. Enterprise products like **Solace Agent Mesh** or **Kafka** are industrial-strength event buses. We don't need that scale, and they cost money / need heavy setup and paid LLMs. So we write our own tiny one — an async publish/subscribe dictionary, a short module. It does the same *conceptual* job:
 
 ```python
 # the entire idea, simplified
@@ -89,7 +89,7 @@ async def publish(topic, payload):
         await fn(payload)             # notify everyone listening
 ```
 
-**Why this is a feature, not a shortcut:** your paper can honestly claim you built a *lightweight event-driven self-healing system for cost-constrained environments*. "We used Solace" is configuration. "We designed a minimal event-driven control plane" is engineering.
+**Why this is a feature, not a shortcut:** you can honestly claim you built a *lightweight event-driven self-healing system for cost-constrained environments*. "We used Solace" is configuration. "We designed a minimal event-driven control plane" is engineering.
 
 ---
 
@@ -132,8 +132,8 @@ This is the single most important thing to understand. Walk through it until you
 ## 7. Why each technology was chosen (defend it in viva)
 
 - **FastAPI** — async (agents run concurrently without blocking), auto-generates API docs, industry standard.
-- **Groq + open-weight models (gpt-oss, Qwen)** — genuinely free, fast inference, no card. Removes the cost barrier that blocks most student AI projects. (Note: free-tier hosted model IDs get retired periodically — see `docs/paper.md` §6.2 for what this meant for reproducibility here.)
-- **Our own event bus** — zero cost, fully understood (you can explain every line), and a legitimate research contribution vs. bolting on a heavy framework.
+- **Groq + open-weight models (gpt-oss, Qwen)** — genuinely free, fast inference, no card. Removes the cost barrier that blocks most student AI projects. (Note: free-tier hosted model IDs get retired periodically; see [model-comparison.md](results/model-comparison.md).)
+- **Our own event bus** — zero cost, fully understood (you can explain every line), and simpler than bolting on a heavy framework.
 - **React + Vite** — a real frontend skill employers want; Vite is fast and modern. (Streamlit would have been quicker but isn't a "real app.")
 - **SQLite** — no database server to install or pay for; perfect for a reproducible single-machine testbed.
 - **Render + Vercel** — both deploy from GitHub for free, so the project lives online for your portfolio.
@@ -152,4 +152,4 @@ This is the single most important thing to understand. Walk through it until you
 
 > Prior work either only *alerts* humans (Datadog), only *restarts blindly* (Kubernetes), or only *diagnoses without acting* (LLM-RCA papers like RCAgent, OpenRCA). This project closes the full loop — detect, LLM-diagnose, fix, validate, and retry — over a lightweight self-built event-driven control plane, runnable at zero API cost, and quantifies the MTTR reduction against a manual baseline on a reproducible testbed.
 
-Memorize the shape of that sentence. It's your paper's thesis and your viva's opening answer.
+Memorize the shape of that sentence. It is your viva's opening answer.
